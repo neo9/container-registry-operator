@@ -2,7 +2,7 @@ import { CONTAINER_REGISTRIES, NAMESPACE } from '../constants'
 import { ContainerRegistryData } from '../models/ContainerRegistryData'
 import { ContainerRegistryCleanupJobService } from '../services/ContainerRegistryCleanupJobService'
 import { ContainerRegistryService } from '../services/ContainerRegistryService'
-import { encode } from '../utils/base64Helper'
+import { encode, decode } from '../utils/base64Helper'
 import { log } from '../utils/logger'
 import Operator from './Operator'
 export class ContainerRegistryController extends Operator {
@@ -16,14 +16,13 @@ export class ContainerRegistryController extends Operator {
   }
 
   async reconcile(obj: ContainerRegistryData): Promise<void> {
-    let registryCredentials: { [key: string]: string } | undefined
+    let registryCredentials: string | undefined
     if (obj.spec!.gcrAccessData) {
       registryCredentials = JSON.parse(obj.spec!.gcrAccessData)
-      for (let key in registryCredentials) {
-        registryCredentials[key] = encode(registryCredentials[key])
-      }
     } else if (obj.spec!.secretRef) {
-      registryCredentials = (await this.containerRegistryService.getSecretByName(obj.spec!.secretRef, NAMESPACE))!.body!.data
+      registryCredentials = JSON.parse(
+        decode(Object.values((await this.containerRegistryService.getSecretByName(obj.spec!.secretRef, NAMESPACE))!.body!.data!)[0]),
+      )
     }
 
     /**
@@ -41,7 +40,7 @@ export class ContainerRegistryController extends Operator {
         NAMESPACE,
         obj.metadata.name!,
         'config.json',
-        `{hostname: "${obj.spec!.hostname}", project: "${obj.spec!.project}"}`,
+        `{"hostname": "${obj.spec!.hostname}", "project": "${obj.spec!.project}"}`,
       )
 
       // creating the secret
@@ -50,7 +49,7 @@ export class ContainerRegistryController extends Operator {
           obj.metadata.name!.concat('-registry-credentials'),
           NAMESPACE,
           obj.metadata.name!,
-          registryCredentials,
+          JSON.parse(`{"gcr-admin.json": "${encode(JSON.stringify(registryCredentials))}"}`),
           'Opaque',
         )
       }
@@ -118,7 +117,7 @@ export class ContainerRegistryController extends Operator {
         obj.metadata.name!.concat('-config'),
         NAMESPACE,
         'config.json',
-        `{hostname: "${obj.spec!.hostname}", project: "${obj.spec!.project}"}`,
+        `{"hostname": "${obj.spec!.hostname}", "project": "${obj.spec!.project}"}`,
       )
 
       //updating the secrets
@@ -129,11 +128,15 @@ export class ContainerRegistryController extends Operator {
             obj.metadata.name!.concat('-registry-credentials'),
             NAMESPACE,
             obj.metadata.name!,
-            registryCredentials,
+            JSON.parse(`{"gcr-admin.json": "${encode(JSON.stringify(registryCredentials))}"}`),
             'Opaque',
           )
         } else {
-          await this.containerRegistryService.updateSecret(obj.metadata.name!.concat('-registry-credentials'), NAMESPACE, registryCredentials)
+          await this.containerRegistryService.updateSecret(
+            obj.metadata.name!.concat('-registry-credentials'),
+            NAMESPACE,
+            JSON.parse(`{"gcr-admin.json": "${encode(JSON.stringify(registryCredentials))}"}`),
+          )
         }
       } else if (obj.spec!.secretRef) {
         if (await this.containerRegistryService.checkSecretExist(obj.metadata.name!.concat('-registry-credentials'), NAMESPACE)) {
