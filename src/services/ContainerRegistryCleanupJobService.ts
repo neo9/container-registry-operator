@@ -81,8 +81,8 @@ export class ContainerRegistryCleanupJobService {
     return await this.containerRegistryCleanupJob.createCronJob(name, namespace, customRessource, customObject)
   }
 
-  public async updateCronJob(name: string, namespace: string, myCustomResource: ContainerRegistryCleanupJobData) {
-    return await this.containerRegistryCleanupJob.updateCronJob(name, namespace, myCustomResource)
+  public async updateCronJob(name: string, namespace: string, myCustomResource: ContainerRegistryCleanupJobData, customObject: any) {
+    return await this.containerRegistryCleanupJob.updateCronJob(name, namespace, myCustomResource, customObject)
   }
 
   public async deleteCronJob(name: string, namespace: string): Promise<boolean> {

@@ -67,13 +67,16 @@ export class ContainerRegistryCleanupJobRepository {
     }
   }
 
-  public async updateCronJob(name: string, namespace: string, myCustomResource: ContainerRegistryCleanupJobData) {
+  public async updateCronJob(name: string, namespace: string, myCustomResource: ContainerRegistryCleanupJobData, customObject: any) {
     try {
       log.verbose(`updating ${name}`)
       const response_cron = await this.k8sBatchV1beta1Api.readNamespacedCronJob(name, namespace)
       const cronJob: V1beta1CronJob = response_cron.body
       cronJob.spec!.schedule = myCustomResource.spec!.schedule
       cronJob.spec!.jobTemplate!.spec!.template!.spec!.containers![0].args = myCustomResource.spec!.args
+      cronJob.spec!.jobTemplate!.spec!.template!.spec!.volumes![0].configMap!.name = customObject.metadata!.name!.concat('-config')
+      cronJob.spec!.jobTemplate!.spec!.template!.spec!.volumes![1].secret!.secretName = customObject.metadata!.name!.concat('-registry-credentials')
+
       this.k8sBatchV1beta1Api.replaceNamespacedCronJob(name, namespace, cronJob)
     } catch (error) {
       log.error(JSON.stringify(error))

@@ -29,7 +29,7 @@ export class ContainerRegistryCleanupJobController extends Operator {
       if (!(await this.containerRegistryCleanupJobService.checkCronJobExist(cronName, NAMESPACE))) {
         await this.containerRegistryCleanupJobService.createCronJob(cronName, NAMESPACE, obj, customObject)
       } else {
-        await this.containerRegistryCleanupJobService.updateCronJob(cronName, NAMESPACE, obj)
+        await this.containerRegistryCleanupJobService.updateCronJob(cronName, NAMESPACE, obj, customObject)
       }
     })
   }

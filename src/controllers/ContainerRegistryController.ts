@@ -142,6 +142,13 @@ export class ContainerRegistryController extends Operator {
         if (await this.containerRegistryService.checkSecretExist(obj.metadata.name!.concat('-registry-credentials'), NAMESPACE)) {
           await this.containerRegistryService.deleteSecret(obj.metadata.name!.concat('-registry-credentials'), NAMESPACE)
         }
+        await this.containerRegistryService.createSecret(
+          obj.metadata.name!.concat('-registry-credentials'),
+          NAMESPACE,
+          obj.metadata.name!,
+          JSON.parse(`{"gcr-admin.json": "${encode(JSON.stringify(registryCredentials))}"}`),
+          'Opaque',
+        )
       }
 
       // syncing with cleanup job
