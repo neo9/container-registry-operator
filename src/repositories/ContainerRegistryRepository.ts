@@ -36,7 +36,7 @@ export class ContainerRegistryRepository {
       )
     } catch (error) {
       log.verbose(`configmap "${name}" not created in namespace "${namespace}"`)
-      console.log(error)
+      log.error(JSON.stringify(error))
     }
   }
 

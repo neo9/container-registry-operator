@@ -18,10 +18,10 @@ export class ContainerRegistryController extends Operator {
   async reconcile(obj: ContainerRegistryData): Promise<void> {
     let registryCredentials: string | undefined
     if (obj.spec!.gcrAccessData) {
-      registryCredentials = JSON.parse(obj.spec!.gcrAccessData)
+      registryCredentials = obj.spec!.gcrAccessData
     } else if (obj.spec!.secretRef) {
-      registryCredentials = JSON.parse(
-        decode(Object.values((await this.containerRegistryService.getSecretByName(obj.spec!.secretRef, NAMESPACE))!.body!.data!)[0]),
+      registryCredentials = decode(
+        Object.values((await this.containerRegistryService.getSecretByName(obj.spec!.secretRef, NAMESPACE))!.body!.data!)[0],
       )
     }
 
@@ -49,7 +49,7 @@ export class ContainerRegistryController extends Operator {
           obj.metadata.name!.concat('-registry-credentials'),
           NAMESPACE,
           obj.metadata.name!,
-          JSON.parse(`{"gcr-admin.json": "${encode(JSON.stringify(registryCredentials))}"}`),
+          { 'gcr-admin.json': encode(registryCredentials!) },
           'Opaque',
         )
       }
@@ -69,7 +69,7 @@ export class ContainerRegistryController extends Operator {
                 obj.metadata.name!,
                 /* eslint-disable-next-line quotes */
                 /* prettier-ignore */
-                { ".dockerconfigjson": encode(JSON.stringify(registryCredentials)) },
+                { ".dockerconfigjson": `${encode((this.createSecretDataForDockerConfigJsonFromServiceAccount(registryCredentials!, obj)))}` },
                 'kubernetes.io/dockerconfigjson',
               )
             } else {
@@ -85,7 +85,7 @@ export class ContainerRegistryController extends Operator {
                   namespace,
                   /* eslint-disable-next-line quotes */
                   /* prettier-ignore */
-                  { ".dockerconfigjson": encode(JSON.stringify(registryCredentials)) },
+                  { ".dockerconfigjson": `${encode((this.createSecretDataForDockerConfigJsonFromServiceAccount(registryCredentials!, obj)))}` },
                 )
               } else {
                 const secretname = (await this.containerRegistryService.getSecretByCreater(obj.metadata.name!, namespace))?.metadata!.name!
@@ -96,7 +96,7 @@ export class ContainerRegistryController extends Operator {
                   obj.metadata.name!,
                   /* eslint-disable-next-line quotes */
                   /* prettier-ignore */
-                  { ".dockerconfigjson": encode(JSON.stringify(registryCredentials)) },
+                  { ".dockerconfigjson": `${encode((this.createSecretDataForDockerConfigJsonFromServiceAccount(registryCredentials!, obj)))}` },
                   'kubernetes.io/dockerconfigjson',
                 )
               }
@@ -128,15 +128,13 @@ export class ContainerRegistryController extends Operator {
             obj.metadata.name!.concat('-registry-credentials'),
             NAMESPACE,
             obj.metadata.name!,
-            JSON.parse(`{"gcr-admin.json": "${encode(JSON.stringify(registryCredentials))}"}`),
+            { 'gcr-admin.json': encode(registryCredentials!) },
             'Opaque',
           )
         } else {
-          await this.containerRegistryService.updateSecret(
-            obj.metadata.name!.concat('-registry-credentials'),
-            NAMESPACE,
-            JSON.parse(`{"gcr-admin.json": "${encode(JSON.stringify(registryCredentials))}"}`),
-          )
+          await this.containerRegistryService.updateSecret(obj.metadata.name!.concat('-registry-credentials'), NAMESPACE, {
+            'gcr-admin.json': encode(registryCredentials!),
+          })
         }
       } else if (obj.spec!.secretRef) {
         if (await this.containerRegistryService.checkSecretExist(obj.metadata.name!.concat('-registry-credentials'), NAMESPACE)) {
@@ -146,7 +144,7 @@ export class ContainerRegistryController extends Operator {
           obj.metadata.name!.concat('-registry-credentials'),
           NAMESPACE,
           obj.metadata.name!,
-          JSON.parse(`{"gcr-admin.json": "${encode(JSON.stringify(registryCredentials))}"}`),
+          { 'gcr-admin.json': encode(registryCredentials!) },
           'Opaque',
         )
       }
@@ -166,7 +164,7 @@ export class ContainerRegistryController extends Operator {
                 obj.metadata.name!,
                 /* eslint-disable-next-line quotes */
                 /* prettier-ignore */
-                { ".dockerconfigjson": encode(JSON.stringify(registryCredentials)) },
+                { ".dockerconfigjson": `${encode((this.createSecretDataForDockerConfigJsonFromServiceAccount(registryCredentials!, obj)))}` },
                 'kubernetes.io/dockerconfigjson',
               )
             } else {
@@ -182,7 +180,7 @@ export class ContainerRegistryController extends Operator {
                   namespace,
                   /* eslint-disable-next-line quotes */
                   /* prettier-ignore */
-                  { ".dockerconfigjson": encode(JSON.stringify(registryCredentials)) },
+                  { ".dockerconfigjson": `${encode((this.createSecretDataForDockerConfigJsonFromServiceAccount(registryCredentials!, obj)))}` },
                 )
               } else {
                 const secretname = (await this.containerRegistryService.getSecretByCreater(obj.metadata.name!, namespace))?.metadata!.name!
@@ -193,7 +191,7 @@ export class ContainerRegistryController extends Operator {
                   obj.metadata.name!,
                   /* eslint-disable-next-line quotes */
                   /* prettier-ignore */
-                  { ".dockerconfigjson": encode(JSON.stringify(registryCredentials)) },
+                  { ".dockerconfigjson": `${encode((this.createSecretDataForDockerConfigJsonFromServiceAccount(registryCredentials!, obj)))}` },
                   'kubernetes.io/dockerconfigjson',
                 )
               }
@@ -250,5 +248,17 @@ export class ContainerRegistryController extends Operator {
         }
       })
     })
+  }
+
+  createSecretDataForDockerConfigJsonFromServiceAccount(registryCredentials: string, obj: ContainerRegistryData): string {
+    return `{
+      "auths": {
+        "${obj.spec!.hostname}": {
+          "username": "_json_key",
+          "password": ${JSON.stringify(registryCredentials)},
+          "auth" : "${encode(JSON.stringify(registryCredentials))}"
+        }
+      }
+    }`
   }
 }
