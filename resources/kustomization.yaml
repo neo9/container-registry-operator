@@ -11,4 +11,3 @@ resources:
   - container-registry-operator-editor-role.yaml
   - container-registry-operator-clusterrolebinding.yaml
   - container-registry-operator-deployment.yaml
-  - secret.yaml

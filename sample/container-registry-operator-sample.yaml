@@ -7,8 +7,8 @@
 #     registry: CR1
 #     environnement: sandbox
 # spec:
-#   hostname: "eu.gcr.io"
-#   project: "cr1"
+#   hostname: "gcr.io"
+#   project: "project-1"
 #   gcrAccessData: >-
 #     {
 #       "auth":"password"
@@ -24,35 +24,13 @@
 #     registry: cr2
 #     environnement: sandbox
 # spec:
-#   hostname: 'eu.gcr.io'
-#   project: 'cr2'
-#   #secretName: cr2-custom-secret-name
-#   gcrAccessData: >-
-#     {
-#       "auth":"password"
-#     }
+#   hostname: 'gcr.io'
+#   project: 'project-2'
+#   secretRef : secretname
+#   secretName: cr2-custom-secret-name
 #   namespaces:
 #     - integration
-#     - production
 
-# ---
-# apiVersion: neo9.io/v1
-# kind: ContainerRegistry
-# metadata:
-#   name: cr3
-#   namespace: container-registry-operator
-#   labels:
-#     registry: cr3
-#     environnement: sandbox
-# spec:
-#   hostname: 'eu.gcr.io'
-#   project: 'cr3'
-#   # secretRef : secretname
-#   secretName: cr3-custom-secret-name
-#   gcrAccessData: >-
-#     {"auth":"passworrd"}
-#   namespaces:
-#     - integration
 # ---
 # apiVersion: neo9.io/v1
 # kind: ContainerRegistryCleanupJob
@@ -60,8 +38,8 @@
 #   name: cleanup-job-sandbox
 #   namespace: container-registry-operator
 # spec:
-#   schedule: '0/5 * * * *'
-#   args: ['--help']
+#   schedule: "0 0 1 * *"
+#   args: ["--list-only", "--format=json", "-r=gcr"]
 #   selector:
 #     registrySelector:
 #       environnement: sandbox
