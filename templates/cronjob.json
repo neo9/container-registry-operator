@@ -1,0 +1,67 @@
+{
+  "apiVersion": "batch/v1beta1",
+  "kind": "CronJob",
+  "metadata": {
+    "name": "container-registry-operator",
+    "labels": {
+      "app.kubernetes.io/managed-by": "container-registry-operator",
+      "app.kubernetes.io/created-by": "creater"
+    }
+  },
+  "spec": {
+    "schedule": "0 9 * * *",
+    "concurrencyPolicy": "Forbid",
+    "jobTemplate": {
+      "spec": {
+        "template": {
+          "spec": {
+            "containers": [
+              {
+                "name": "container-registry-cleaner",
+                "image": "index.docker.io/neo9sas/container-registry-cleaner@sha256:72c925aec888080c1c1397dacdcdc642cdd2b0f1ce18dabfbf632889184dbccd",
+                "imagePullPolicy": "IfNotPresent",
+                "command": ["container-registry-cleaner"],
+                "args": ["--help"],
+                "env": [
+                  {
+                    "name": "CONF_FILE",
+                    "value": "/conf/config.json"
+                  },
+                  {
+                    "name": "CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE",
+                    "value": "/auth/gcr-admin.json"
+                  }
+                ],
+                "volumeMounts": [
+                  {
+                    "mountPath": "/conf",
+                    "name": "container-registry-cleaner-config"
+                  },
+                  {
+                    "mountPath": "/auth",
+                    "name": "container-registry-cleaner-auth"
+                  }
+                ]
+              }
+            ],
+            "volumes": [
+              {
+                "configMap": {
+                  "name": "container-registry-cleaner-config"
+                },
+                "name": "container-registry-cleaner-config"
+              },
+              {
+                "secret": {
+                  "secretName": "gcr-admin"
+                },
+                "name": "container-registry-cleaner-auth"
+              }
+            ],
+            "restartPolicy": "OnFailure"
+          }
+        }
+      }
+    }
+  }
+}

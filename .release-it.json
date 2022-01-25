@@ -1,0 +1,53 @@
+{
+    "dry-run": false,
+    "verbose": true,
+    "force": false,
+    "pkgFiles": ["package.json"],
+    "preReleaseId": null,
+    "increment": "patch",
+    "buildCommand": "yarn run build",
+    "changelogCommand": "yarn run build:changelog",
+    "safeBump": false,
+    "requireCleanWorkingDir": false,
+    "git": {
+      "commit": true,
+      "commitMessage": "release: V ${version}",
+      "tag": true,
+      "tagName": "v${version}",
+      "tagAnnotation": "release: V ${version}",
+      "push": true
+    },
+    "hooks": {
+      "before:git:bump": "git-chglog --next-tag v${version} -o CHANGELOG.md",
+      "after:release": "npm run post:release"
+    },
+    "npm": {
+      "publish": false
+    },
+    "github": {
+      "release": false
+    },
+    "dist": {
+      "repo": false
+    },
+    "plugins": {},
+    "prompt": {
+      "src": {
+        "status": true,
+        "commit": true,
+        "tag": true,
+        "push": true,
+        "release": true,
+        "publish": true
+      },
+      "dist": {
+        "status": true,
+        "commit": true,
+        "tag": true,
+        "push": true,
+        "release": true,
+        "publish": true
+      }
+    }
+  }
+  

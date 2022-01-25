@@ -1,0 +1,69 @@
+# permissions for end users to edit container-registry-operators.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: container-registry-operator-editor-role
+rules:
+  - apiGroups:
+      - neo9.io
+    resources:
+      - container-registries-cleanupjob
+      - container-registries
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - neo9.io
+    resources:
+      - container-registries-cleanupjob/status
+      - container-registries/status
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - apps
+    verbs:
+      - create
+      - delete
+      - deletecollection
+      - get
+      - list
+      - patch
+      - update
+      - watch
+    resources:
+      - daemonsets
+      - deployments
+      - deployments/rollback
+      - deployments/scale
+      - replicasets
+      - replicasets/scale
+      - statefulsets
+      - statefulsets/scale
+  - apiGroups:
+      - ''
+    verbs:
+      - create
+      - delete
+      - deletecollection
+      - get
+      - list
+      - patch
+      - update
+      - watch
+    resources:
+      - pods
+      - secrets
+  - apiGroups: ['', 'extensions', 'apps', 'batch']
+    resources: ['*']
+    verbs: ['*']

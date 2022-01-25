@@ -1,0 +1,38 @@
+{
+  "name": "container-registry-operator",
+  "version": "0.1.0",
+  "description": "",
+  "main": "dist/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "npx tsc",
+    "watch": "npx tsc -w",
+    "clean": "rm -rf dist node_modules",
+    "start": "node dist/index.js",
+    "lint": "eslint . --ext .ts",
+    "lint-and-fix": "eslint . --ext .ts --fix",
+    "release": "release-it --ci",
+    "release:dry": "release-it --ci --dry-run=true",
+    "post:release": "echo Successfully released $npm_package_version",
+    "prepare": "husky install"
+  },
+  "author": "Iheb Chakroun <iheb.chakroun@neo9.fr>",
+  "license": "GNU",
+  "dependencies": {
+    "@kubernetes/client-node": "^0.14.3",
+    "@neo9/n9-node-log": "^3.2.0",
+    "typescript": "^4.2.4"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^4.25.0",
+    "@typescript-eslint/parser": "^4.25.0",
+    "eslint": "^7.27.0",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-plugin-prettier": "^3.4.0",
+    "husky": "^7.0.0",
+    "prettier": "^2.3.0",
+    "pretty-quick": "^3.1.1",
+    "release-it": "*",
+    "ts-node": "^10.1.0"
+  }
+}

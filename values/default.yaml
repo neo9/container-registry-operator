@@ -1,0 +1,96 @@
+image:
+  repository: https://hub.docker.com/r/neo9sas/container-registry-operator
+  tag: latest
+deployment:
+  annotations:
+    reloader.stakater.com/auto: 'true'
+global:
+  env: application
+  istio:
+    enabled: false
+service:
+  port: 8080
+  targetPort: 8080
+ingress:
+  enabled: false
+resources:
+  requests:
+    cpu: 500m
+    memory: 200M
+  limits:
+    cpu: 500m
+    memory: 200M
+pod:
+  replicas: 1
+
+serviceAccount:
+  create: true
+  name: 'container-registry-operator-sa'
+
+clusterrole:
+  enabled: true
+  autoBindClusteRole: true
+  rules:
+    - apiGroups:
+        - neo9.io
+      resources:
+        - container-registries-cleanupjob
+        - container-registries
+      verbs:
+        - create
+        - delete
+        - get
+        - list
+        - patch
+        - update
+        - watch
+    - apiGroups:
+        - neo9.io
+      resources:
+        - container-registries-cleanupjob/status
+        - container-registries/status
+      verbs:
+        - create
+        - delete
+        - get
+        - list
+        - patch
+        - update
+        - watch
+    - apiGroups:
+        - apps
+      verbs:
+        - create
+        - delete
+        - deletecollection
+        - get
+        - list
+        - patch
+        - update
+        - watch
+      resources:
+        - daemonsets
+        - deployments
+        - deployments/rollback
+        - deployments/scale
+        - replicasets
+        - replicasets/scale
+        - statefulsets
+        - statefulsets/scale
+    - apiGroups:
+        - ''
+      verbs:
+        - create
+        - delete
+        - deletecollection
+        - get
+        - list
+        - patch
+        - update
+        - watch
+      resources:
+        - pods
+        - secrets
+    - apiGroups: ['', 'extensions', 'apps', 'batch']
+      resources: ['*']
+      verbs: ['*']

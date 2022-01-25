@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: '4'
+  labels:
+    app: container-registry-operator
+    app.kubernetes.io/component: container-registry-operator
+    app.kubernetes.io/instance: container-registry-operator
+  name: container-registry-operator-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      deployment: container-registry-operator-deployment
+  template:
+    metadata:
+      labels:
+        deployment: container-registry-operator-deployment
+    spec:
+      containers:
+        - env:
+            - name: DEV_MODE
+              value: 'false'
+          image: neo9/container-registry-operator:latest
+          imagePullPolicy: IfNotPresent
+          name: container-registry-operator
+      serviceAccount: container-registry-operator-service-account

@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: container-registry-operator
+commonLabels:
+  app: container-registry-operator
+resources:
+  - container-registry-operator-namespace.yaml
+  - container-registry-operator-sa.yaml
+  - container-registry-crd.yaml
+  - container-registry-cleanup-job-crd.yaml
+  - container-registry-operator-editor-role.yaml
+  - container-registry-operator-clusterrolebinding.yaml
+  - container-registry-operator-deployment.yaml
