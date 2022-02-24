@@ -65,7 +65,9 @@ export class ContainerRegistryCleanupJobService {
           }
           break
         case 'DELETE':
-          await this.containerRegistryCleanupJob.deleteCronJob(cronName, namespace)
+          if (await this.containerRegistryCleanupJob.checkCronJobExist(cronName, namespace)) {
+            await this.containerRegistryCleanupJob.deleteCronJob(cronName, namespace)
+          }
           break
         default:
           break

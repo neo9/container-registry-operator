@@ -7,6 +7,7 @@
 #     registry: CR1
 #     environnement: sandbox
 # spec:
+#   imageRegistry:"gcr"
 #   hostname: "gcr.io"
 #   project: "project-1"
 #   gcrAccessData: >-
@@ -24,6 +25,7 @@
 #     registry: cr2
 #     environnement: sandbox
 # spec:
+#   imageRegistry:"gcr"
 #   hostname: 'gcr.io'
 #   project: 'project-2'
 #   secretRef : secretname

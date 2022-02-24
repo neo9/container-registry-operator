@@ -25,6 +25,7 @@ metadata:
     registry: CR1
     environnement: sandbox
 spec:
+  imageRegistry: 'gcr
   hostname: 'gcr.io'
   project: 'cr1'
   # gcrAccessData: >-
@@ -37,6 +38,7 @@ spec:
     - production
 ```
 
+- **imageRegistry**: GCR or Docker
 - **hostname:** The hostname of the container regsitry
 - **project:** The project in the container registry
 - **namespaces:** List of Namespaces to have the imagePullSecret

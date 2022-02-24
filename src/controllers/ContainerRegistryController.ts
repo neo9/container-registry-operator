@@ -4,6 +4,7 @@ import { ContainerRegistryCleanupJobService } from '../services/ContainerRegistr
 import { ContainerRegistryService } from '../services/ContainerRegistryService'
 import { encode, decode } from '../utils/base64Helper'
 import { log } from '../utils/logger'
+import { wait } from '../utils/wait'
 import Operator from './Operator'
 export class ContainerRegistryController extends Operator {
   private containerRegistryService: ContainerRegistryService
@@ -20,6 +21,10 @@ export class ContainerRegistryController extends Operator {
     if (obj.spec!.gcrAccessData) {
       registryCredentials = obj.spec!.gcrAccessData
     } else if (obj.spec!.secretRef) {
+      while (!(await this.containerRegistryService.checkSecretExist(obj.spec!.secretRef, NAMESPACE))) {
+        log.error(`${obj.spec!.secretRef} not found ...`)
+        await wait(60000) //wait 1 minute to check again
+      }
       registryCredentials = decode(
         Object.values((await this.containerRegistryService.getSecretByName(obj.spec!.secretRef, NAMESPACE))!.body!.data!)[0],
       )
@@ -69,7 +74,7 @@ export class ContainerRegistryController extends Operator {
                 obj.metadata.name!,
                 /* eslint-disable-next-line quotes */
                 /* prettier-ignore */
-                { ".dockerconfigjson": `${encode((this.createSecretDataForDockerConfigJsonFromServiceAccount(registryCredentials!, obj)))}` },
+                { ".dockerconfigjson": `${encode((this.createImagePullSecret(registryCredentials!, obj)))}` },
                 'kubernetes.io/dockerconfigjson',
               )
             } else {
@@ -85,7 +90,7 @@ export class ContainerRegistryController extends Operator {
                   namespace,
                   /* eslint-disable-next-line quotes */
                   /* prettier-ignore */
-                  { ".dockerconfigjson": `${encode((this.createSecretDataForDockerConfigJsonFromServiceAccount(registryCredentials!, obj)))}` },
+                  { ".dockerconfigjson": `${encode((this.createImagePullSecret(registryCredentials!, obj)))}` },
                 )
               } else {
                 const secretname = (await this.containerRegistryService.getSecretByCreater(obj.metadata.name!, namespace))?.metadata!.name!
@@ -96,7 +101,7 @@ export class ContainerRegistryController extends Operator {
                   obj.metadata.name!,
                   /* eslint-disable-next-line quotes */
                   /* prettier-ignore */
-                  { ".dockerconfigjson": `${encode((this.createSecretDataForDockerConfigJsonFromServiceAccount(registryCredentials!, obj)))}` },
+                  { ".dockerconfigjson": `${encode((this.createImagePullSecret(registryCredentials!, obj)))}` },
                   'kubernetes.io/dockerconfigjson',
                 )
               }
@@ -164,7 +169,7 @@ export class ContainerRegistryController extends Operator {
                 obj.metadata.name!,
                 /* eslint-disable-next-line quotes */
                 /* prettier-ignore */
-                { ".dockerconfigjson": `${encode((this.createSecretDataForDockerConfigJsonFromServiceAccount(registryCredentials!, obj)))}` },
+                { ".dockerconfigjson": `${encode((this.createImagePullSecret(registryCredentials!, obj)))}` },
                 'kubernetes.io/dockerconfigjson',
               )
             } else {
@@ -180,7 +185,7 @@ export class ContainerRegistryController extends Operator {
                   namespace,
                   /* eslint-disable-next-line quotes */
                   /* prettier-ignore */
-                  { ".dockerconfigjson": `${encode((this.createSecretDataForDockerConfigJsonFromServiceAccount(registryCredentials!, obj)))}` },
+                  { ".dockerconfigjson": `${encode((this.createImagePullSecret(registryCredentials!, obj)))}` },
                 )
               } else {
                 const secretname = (await this.containerRegistryService.getSecretByCreater(obj.metadata.name!, namespace))?.metadata!.name!
@@ -191,7 +196,7 @@ export class ContainerRegistryController extends Operator {
                   obj.metadata.name!,
                   /* eslint-disable-next-line quotes */
                   /* prettier-ignore */
-                  { ".dockerconfigjson": `${encode((this.createSecretDataForDockerConfigJsonFromServiceAccount(registryCredentials!, obj)))}` },
+                  { ".dockerconfigjson": `${encode((this.createImagePullSecret(registryCredentials!, obj)))}` },
                   'kubernetes.io/dockerconfigjson',
                 )
               }
@@ -248,6 +253,30 @@ export class ContainerRegistryController extends Operator {
         }
       })
     })
+  }
+
+  createImagePullSecret(registryCredentials: string, obj: ContainerRegistryData): string {
+    if (obj.spec?.imageRegistry?.toLowerCase() == 'gcr') {
+      return this.createSecretDataForDockerConfigJsonFromServiceAccount(registryCredentials, obj)
+    } else if (obj.spec?.imageRegistry?.toLowerCase() == 'docker') {
+      return this.createSecretDataForDockerConfigJsonFromDockerCredentials(registryCredentials, obj)
+    }
+    throw new Error()
+  }
+
+  createSecretDataForDockerConfigJsonFromDockerCredentials(registryCredentials: string, obj: ContainerRegistryData): string {
+    const registryCredentialsObject = JSON.parse(registryCredentials)
+    const auth = encode(`${JSON.stringify(registryCredentialsObject.username)}:${JSON.stringify(registryCredentialsObject.password)}`)
+    return `{
+      "auths": {
+        "${obj.spec!.hostname}": {
+          "username": ${JSON.stringify(registryCredentialsObject.username)},
+          "password": ${JSON.stringify(registryCredentialsObject.password)},
+          "email": ${JSON.stringify(registryCredentialsObject.email)},
+          "auth" : "${auth}"
+        }
+      }
+    }`
   }
 
   createSecretDataForDockerConfigJsonFromServiceAccount(registryCredentials: string, obj: ContainerRegistryData): string {
