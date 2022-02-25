@@ -36,7 +36,7 @@ export class ContainerRegistryCleanupJobRepository {
   public async deleteCronJob(name: string, namespace: string): Promise<boolean> {
     try {
       log.verbose(`Deleting ${name}`)
-      this.k8sBatchV1beta1Api.deleteNamespacedCronJob(name, namespace)
+      await this.k8sBatchV1beta1Api.deleteNamespacedCronJob(name, namespace)
       return true
     } catch (error) {
       log.error(JSON.stringify(error))
@@ -77,7 +77,7 @@ export class ContainerRegistryCleanupJobRepository {
       cronJob.spec!.jobTemplate!.spec!.template!.spec!.volumes![0].configMap!.name = customObject.metadata!.name!.concat('-config')
       cronJob.spec!.jobTemplate!.spec!.template!.spec!.volumes![1].secret!.secretName = customObject.metadata!.name!.concat('-registry-credentials')
 
-      this.k8sBatchV1beta1Api.replaceNamespacedCronJob(name, namespace, cronJob)
+      await this.k8sBatchV1beta1Api.replaceNamespacedCronJob(name, namespace, cronJob)
     } catch (error) {
       log.error(JSON.stringify(error))
     }

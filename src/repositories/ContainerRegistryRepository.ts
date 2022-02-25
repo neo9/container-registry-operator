@@ -56,7 +56,7 @@ export class ContainerRegistryRepository {
       const response_config = await this.k8sApiPods.readNamespacedConfigMap(name, namespace)
       const configMap: V1ConfigMap = response_config.body
       configMap.data![attributename] = data
-      this.k8sApiPods.replaceNamespacedConfigMap(name, namespace, configMap)
+      await this.k8sApiPods.replaceNamespacedConfigMap(name, namespace, configMap)
     } catch (error) {
       log.verbose(`configmap "${name}" not updated in namespace "${namespace}"`)
       log.error(JSON.stringify(error))
@@ -65,7 +65,7 @@ export class ContainerRegistryRepository {
 
   public async deleteConfigMap(name: string, namespace: string): Promise<boolean> {
     try {
-      this.k8sApiPods.deleteNamespacedConfigMap(name, namespace)
+      await this.k8sApiPods.deleteNamespacedConfigMap(name, namespace)
       log.verbose(`configmap "${name}" deleted from namespace "${namespace}"`)
       return true
     } catch (error) {
@@ -146,7 +146,7 @@ export class ContainerRegistryRepository {
       const response_secret_gcrAdmin = await this.k8sApiPods.readNamespacedSecret(name, namespace)
       const gcrAdmin: V1Secret = response_secret_gcrAdmin.body
       gcrAdmin.data = data
-      this.k8sApiPods.replaceNamespacedSecret(name, namespace, gcrAdmin)
+      await this.k8sApiPods.replaceNamespacedSecret(name, namespace, gcrAdmin)
     } catch (error) {
       log.verbose(`secret "${name}" note updated in namespace "${namespace}"`)
       log.error(JSON.stringify(error))
@@ -164,7 +164,7 @@ export class ContainerRegistryRepository {
 
   public async deleteSecret(name: string, namespace: string): Promise<boolean> {
     try {
-      this.k8sApiPods.deleteNamespacedSecret(name, namespace)
+      await this.k8sApiPods.deleteNamespacedSecret(name, namespace)
       log.verbose(`secret "${name}" deleted from namespace "${namespace}"`)
       return true
     } catch (error) {
