@@ -205,4 +205,9 @@ export class ContainerRegistryRepository {
       log.error(JSON.stringify(error))
     }
   }
+
+  public async secretHasChanged(name: string, namespace: string, data: string): Promise<boolean> {
+    const currentSecretData = Object.values((await this.getSecretByName(name, namespace))!.body!.data!)[0]
+    return currentSecretData !== data ? true : false
+  }
 }

@@ -99,14 +99,24 @@ export class ContainerRegistryController extends Operator {
                   namespace,
                 )
               ) {
-                //update the imagePullSecret
-                await this.containerRegistryService.updateSecret(
-                  obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret'),
-                  namespace,
-                  /* eslint-disable-next-line quotes */
-                  /* prettier-ignore */
-                  { ".dockerconfigjson": `${encode((this.createImagePullSecret(registryCredentials!, obj)))}` },
-                )
+                if (
+                  await this.containerRegistryService.secretHasChanged(
+                    obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret'),
+                    namespace,
+                    `${encode(this.createImagePullSecret(registryCredentials!, obj))}`,
+                  )
+                ) {
+                  //secret is still using old name but data has changed
+                  await this.containerRegistryService.updateSecret(
+                    obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret'),
+                    namespace,
+                    /* eslint-disable-next-line quotes */
+                    /* prettier-ignore */
+                    { ".dockerconfigjson": `${encode((this.createImagePullSecret(registryCredentials!, obj)))}` },
+                  )
+                } else {
+                  log.verbose(`${obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret')} did not change`)
+                }
               } else {
                 /**
                  * update the imagePullSecret:
@@ -203,14 +213,24 @@ export class ContainerRegistryController extends Operator {
                   namespace,
                 )
               ) {
-                //secret is still using old name
-                await this.containerRegistryService.updateSecret(
-                  obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret'),
-                  namespace,
-                  /* eslint-disable-next-line quotes */
-                  /* prettier-ignore */
-                  { ".dockerconfigjson": `${encode((this.createImagePullSecret(registryCredentials!, obj)))}` },
-                )
+                if (
+                  await this.containerRegistryService.secretHasChanged(
+                    obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret'),
+                    namespace,
+                    `${encode(this.createImagePullSecret(registryCredentials!, obj))}`,
+                  )
+                ) {
+                  //secret is still using old name but data has changed
+                  await this.containerRegistryService.updateSecret(
+                    obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret'),
+                    namespace,
+                    /* eslint-disable-next-line quotes */
+                    /* prettier-ignore */
+                    { ".dockerconfigjson": `${encode((this.createImagePullSecret(registryCredentials!, obj)))}` },
+                  )
+                } else {
+                  log.verbose(`${obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret')} did not change`)
+                }
               } else {
                 //secret is using a new name, so get secret by label app.kubernetes.io/created-by
                 // delete old secret and create new

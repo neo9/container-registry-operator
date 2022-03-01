@@ -63,4 +63,8 @@ export class ContainerRegistryService {
   public async getAllNamespaces() {
     return this.containerRegistryRepository.getAllNamespaces()
   }
+
+  public async secretHasChanged(name: string, namespace: string, data: string): Promise<boolean> {
+    return this.containerRegistryRepository.secretHasChanged(name, namespace, data)
+  }
 }
