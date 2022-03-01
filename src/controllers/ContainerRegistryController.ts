@@ -17,6 +17,9 @@ export class ContainerRegistryController extends Operator {
   }
 
   async reconcile(obj: ContainerRegistryData): Promise<void> {
+    /**
+     * init credentials
+     */
     let registryCredentials: string | undefined
     if (obj.spec!.gcrAccessData) {
       registryCredentials = obj.spec!.gcrAccessData
@@ -29,14 +32,26 @@ export class ContainerRegistryController extends Operator {
         Object.values((await this.containerRegistryService.getSecretByName(obj.spec!.secretRef, NAMESPACE))!.body!.data!)[0],
       )
     }
+    /**
+     * init namespaces
+     */
+    let namespaces: string[]
+    if (obj.spec!.namespaces && obj.spec!.namespaces.includes('*')) {
+      //get only active namespaces
+      namespaces = (await this.containerRegistryService.getAllNamespaces())!.items
+        .filter((namespace) => namespace.status!.phase == 'Active')
+        .map((namespace) => namespace.metadata!.name!)
+    } else {
+      namespaces = obj.spec!.namespaces
+    }
 
     /**
-     * checking the exsistance of the deployed crd
+     * Check if there is this CustomRessource has been deployed already or not
      */
     if (!(await this.containerRegistryService.checkConfigMapExist(obj.metadata.name!.concat('-config'), NAMESPACE))) {
       /**
        * ************ CREATING TASK ****************
-       * crd does not exist
+       * CustomRessource does not exist
        * creating all needed data
        * starting with the configmap
        */
@@ -59,15 +74,15 @@ export class ContainerRegistryController extends Operator {
         )
       }
 
-      // syncing with cleanup job
+      // sync with cleanup job
       await this.containerRegistryCleanupJobService.sync(obj, NAMESPACE, 'ADD')
 
-      // patching dockerconfigjson
-      if (obj.spec!.namespaces) {
-        obj.spec!.namespaces.forEach(async (namespace) => {
+      // propagate the imagePullSecret throughout the needed namespaces
+      if (namespaces) {
+        namespaces.forEach(async (namespace) => {
           if (await this.containerRegistryService.checkNamespaceExist(namespace)) {
             if (!(await this.containerRegistryService.checkSecretExistByCreater(obj.metadata.name!, namespace))) {
-              //creating dockerconfigjson
+              //create the imagePullSecret
               await this.containerRegistryService.createSecret(
                 obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret'),
                 namespace,
@@ -78,13 +93,13 @@ export class ContainerRegistryController extends Operator {
                 'kubernetes.io/dockerconfigjson',
               )
             } else {
-              //updating dockerconfigjson
               if (
                 await this.containerRegistryService.checkSecretExist(
                   obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret'),
                   namespace,
                 )
               ) {
+                //update the imagePullSecret
                 await this.containerRegistryService.updateSecret(
                   obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret'),
                   namespace,
@@ -93,6 +108,11 @@ export class ContainerRegistryController extends Operator {
                   { ".dockerconfigjson": `${encode((this.createImagePullSecret(registryCredentials!, obj)))}` },
                 )
               } else {
+                /**
+                 * update the imagePullSecret:
+                 * if $namespace has a secret for the same CustomRessource but with diffrent name
+                 *  => it will delete it and create new secret
+                 */
                 const secretname = (await this.containerRegistryService.getSecretByCreater(obj.metadata.name!, namespace))?.metadata!.name!
                 await this.containerRegistryService.deleteSecret(secretname, namespace)
                 await this.containerRegistryService.createSecret(
@@ -114,7 +134,7 @@ export class ContainerRegistryController extends Operator {
     } else {
       /**
        * ************ UPDATING TASK ****************
-       * crd does exist
+       * CustomRessource exist
        * updating all needed data
        * starting with the configmap
        */
@@ -125,10 +145,10 @@ export class ContainerRegistryController extends Operator {
         `{"hostname": "${obj.spec!.hostname}", "project": "${obj.spec!.project}"}`,
       )
 
-      //updating the secrets
+      //managing registry credentials secret
       if (obj.spec!.gcrAccessData) {
         if (!(await this.containerRegistryService.checkSecretExist(obj.metadata.name!.concat('-registry-credentials'), NAMESPACE))) {
-          // creating the secret because it doesnt exist
+          // creating the secret because it doesnt exist (because we were using secretRef and switched to gcrAccessData)
           await this.containerRegistryService.createSecret(
             obj.metadata.name!.concat('-registry-credentials'),
             NAMESPACE,
@@ -137,14 +157,17 @@ export class ContainerRegistryController extends Operator {
             'Opaque',
           )
         } else {
+          //update secret
           await this.containerRegistryService.updateSecret(obj.metadata.name!.concat('-registry-credentials'), NAMESPACE, {
             'gcr-admin.json': encode(registryCredentials!),
           })
         }
       } else if (obj.spec!.secretRef) {
+        // if we were using gcrAccessData and switched to secretRef, delete old secret
         if (await this.containerRegistryService.checkSecretExist(obj.metadata.name!.concat('-registry-credentials'), NAMESPACE)) {
           await this.containerRegistryService.deleteSecret(obj.metadata.name!.concat('-registry-credentials'), NAMESPACE)
         }
+        //create new secret
         await this.containerRegistryService.createSecret(
           obj.metadata.name!.concat('-registry-credentials'),
           NAMESPACE,
@@ -154,15 +177,15 @@ export class ContainerRegistryController extends Operator {
         )
       }
 
-      // syncing with cleanup job
+      //sync with cleanup job
       await this.containerRegistryCleanupJobService.sync(obj, NAMESPACE, 'UPDATE')
 
-      // patching dockerconfigjson
-      if (obj.spec!.namespaces) {
-        obj.spec!.namespaces.forEach(async (namespace) => {
+      //patching imagePullSecret
+      if (namespaces) {
+        namespaces.forEach(async (namespace) => {
           if (await this.containerRegistryService.checkNamespaceExist(namespace)) {
             if (!(await this.containerRegistryService.checkSecretExistByCreater(obj.metadata.name!, namespace))) {
-              //creating dockerconfigjson
+              //if we dont have an imagePullSecret created for this crd, we should create one
               await this.containerRegistryService.createSecret(
                 obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret'),
                 namespace,
@@ -173,13 +196,14 @@ export class ContainerRegistryController extends Operator {
                 'kubernetes.io/dockerconfigjson',
               )
             } else {
-              //updating dockerconfigjson
+              //else update imagePullSecret
               if (
                 await this.containerRegistryService.checkSecretExist(
                   obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret'),
                   namespace,
                 )
               ) {
+                //secret is still using old name
                 await this.containerRegistryService.updateSecret(
                   obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret'),
                   namespace,
@@ -188,6 +212,8 @@ export class ContainerRegistryController extends Operator {
                   { ".dockerconfigjson": `${encode((this.createImagePullSecret(registryCredentials!, obj)))}` },
                 )
               } else {
+                //secret is using a new name, so get secret by label app.kubernetes.io/created-by
+                // delete old secret and create new
                 const secretname = (await this.containerRegistryService.getSecretByCreater(obj.metadata.name!, namespace))?.metadata!.name!
                 await this.containerRegistryService.deleteSecret(secretname, namespace)
                 await this.containerRegistryService.createSecret(
@@ -201,20 +227,17 @@ export class ContainerRegistryController extends Operator {
                 )
               }
             }
-            //deleting dockerconfigjson when namespaces list updated
+            /**
+             * this code is for when we update the list of namespaces: it will get all namespaces,
+             * loop them and check if a namespace is not listed still it has a secret created
+             * for the concerned customRessource so it must be deleted
+             *
+             * it checks the secret by the label app.kubernetes.io/created-by
+             */
             let allNamespaces = await this.containerRegistryService.getAllNamespaces()
             allNamespaces?.items.forEach(async (namespace) => {
-              if (!obj.spec!.namespaces.includes(namespace.metadata!.name!) && namespace.metadata!.name! !== NAMESPACE) {
-                const secrets = await this.containerRegistryService.getSecretsByNamspace(namespace.metadata!.name!)
-                secrets?.body.items.forEach(async (secret) => {
-                  if (secret.metadata!.labels && secret.metadata!.labels['app.kubernetes.io/created-by']) {
-                    if (secret.metadata!.labels['app.kubernetes.io/created-by'] === obj.metadata.name) {
-                      const secretname = (await this.containerRegistryService.getSecretByCreater(obj.metadata.name!, namespace.metadata!.name!))
-                        ?.metadata!.name!
-                      await this.containerRegistryService.deleteSecret(secretname, namespace.metadata!.name!)
-                    }
-                  }
-                })
+              if (!namespaces.includes(namespace.metadata!.name!) && namespace.metadata!.name! !== NAMESPACE) {
+                await this.deleteSecretByLabelCreatedBy(namespace.metadata!.name!, obj.metadata.name!)
               }
             })
           } else {
@@ -228,6 +251,7 @@ export class ContainerRegistryController extends Operator {
   /**
    *
    * ************ DELETING TASK ****************
+   * when CusttomRessource is deleted, this will delete everything related to it
    */
   async deleteResource(obj: ContainerRegistryData): Promise<void> {
     log.verbose(`Deleted ${obj.metadata.name}`)
@@ -242,16 +266,7 @@ export class ContainerRegistryController extends Operator {
 
     let allNamespaces = await this.containerRegistryService.getAllNamespaces()
     allNamespaces?.items.forEach(async (namespace) => {
-      const secrets = await this.containerRegistryService.getSecretsByNamspace(namespace.metadata!.name!)
-      secrets?.body.items.forEach(async (secret) => {
-        if (secret.metadata!.labels && secret.metadata!.labels['app.kubernetes.io/created-by']) {
-          if (secret.metadata!.labels['app.kubernetes.io/created-by'] === obj.metadata.name) {
-            const secretname = (await this.containerRegistryService.getSecretByCreater(obj.metadata.name!, namespace.metadata!.name!))?.metadata!
-              .name!
-            await this.containerRegistryService.deleteSecret(secretname, namespace.metadata!.name!)
-          }
-        }
-      })
+      await this.deleteSecretByLabelCreatedBy(namespace.metadata!.name!, obj.metadata.name!)
     })
   }
 
@@ -261,7 +276,8 @@ export class ContainerRegistryController extends Operator {
     } else if (obj.spec?.imageRegistry?.toLowerCase() == 'docker') {
       return this.createSecretDataForDockerConfigJsonFromDockerCredentials(registryCredentials, obj)
     }
-    throw new Error()
+    log.error(`${obj.spec?.imageRegistry?.toLowerCase()} is not supported ...`)
+    throw new Error('not supported')
   }
 
   createSecretDataForDockerConfigJsonFromDockerCredentials(registryCredentials: string, obj: ContainerRegistryData): string {
@@ -289,5 +305,21 @@ export class ContainerRegistryController extends Operator {
         }
       }
     }`
+  }
+
+  /**
+   * this method check the secrets in a namespace
+   * if there is a secret created by the CustomRessource it will delete it
+   */
+  async deleteSecretByLabelCreatedBy(namespaceName: string, crName: string): Promise<void> {
+    const secrets = await this.containerRegistryService.getSecretsByNamspace(namespaceName)
+    secrets?.body.items.forEach(async (secret) => {
+      if (secret.metadata!.labels && secret.metadata!.labels['app.kubernetes.io/created-by']) {
+        if (secret.metadata!.labels['app.kubernetes.io/created-by'] === crName) {
+          const secretname = (await this.containerRegistryService.getSecretByCreater(crName, namespaceName))?.metadata!.name!
+          await this.containerRegistryService.deleteSecret(secretname, namespaceName)
+        }
+      }
+    })
   }
 }
