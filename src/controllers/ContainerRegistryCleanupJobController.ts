@@ -1,6 +1,7 @@
 import { CONTAINER_REGISTRIES_CLEANUP_JOB, NAMESPACE } from '../constants'
 import { ContainerRegistryCleanupJobData } from '../models/ContainerRegistryCleanupJobData'
 import { ContainerRegistryCleanupJobService } from '../services/ContainerRegistryCleanupJobService'
+import { log } from '../utils/logger'
 import Operator from './Operator'
 
 export class ContainerRegistryCleanupJobController extends Operator {
@@ -9,6 +10,12 @@ export class ContainerRegistryCleanupJobController extends Operator {
   constructor() {
     super(CONTAINER_REGISTRIES_CLEANUP_JOB)
     this.containerRegistryCleanupJobService = new ContainerRegistryCleanupJobService()
+  }
+
+  async reconcileLoop(): Promise<void> {
+    log.info('Reconciling CONTAINER_REGISTRIES_CLEANUP_JOB')
+    const customRessources = await this.containerRegistryCleanupJobService.getCustomResources(CONTAINER_REGISTRIES_CLEANUP_JOB)
+    customRessources.forEach(async (resource) => this.reconcile(resource))
   }
 
   async reconcile(obj: ContainerRegistryCleanupJobData): Promise<void> {

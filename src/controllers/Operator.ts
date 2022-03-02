@@ -19,6 +19,9 @@ export default abstract class Operator {
 
   async start(): Promise<void> {
     this.watchResource()
+    setInterval(async () => {
+      await this.reconcileLoop()
+    }, 120000) //reconcile every 2m
   }
 
   async watchResource(): Promise<any> {
@@ -34,7 +37,7 @@ export default abstract class Operator {
 
   onDone(err: any) {
     log.error(`Connection closed. ${err}`)
-    this.watchResource()
+    this.start()
   }
 
   async onEvent(phase: string, apiObj: any) {
@@ -58,6 +61,8 @@ export default abstract class Operator {
   abstract reconcile(obj: any): Promise<void>
 
   abstract deleteResource(obj: any): Promise<void>
+
+  abstract reconcileLoop(): Promise<void>
 }
 
 process.on('unhandledRejection', (reason, p) => {

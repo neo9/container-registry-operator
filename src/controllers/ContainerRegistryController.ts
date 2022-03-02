@@ -3,7 +3,7 @@ import { ContainerRegistryData } from '../models/ContainerRegistryData'
 import { ContainerRegistryCleanupJobService } from '../services/ContainerRegistryCleanupJobService'
 import { ContainerRegistryService } from '../services/ContainerRegistryService'
 import { encode, decode } from '../utils/base64Helper'
-import { log } from '../utils/logger'
+import { log, pretty_log } from '../utils/logger'
 import { wait } from '../utils/wait'
 import Operator from './Operator'
 export class ContainerRegistryController extends Operator {
@@ -14,6 +14,12 @@ export class ContainerRegistryController extends Operator {
     super(CONTAINER_REGISTRIES)
     this.containerRegistryService = new ContainerRegistryService()
     this.containerRegistryCleanupJobService = new ContainerRegistryCleanupJobService()
+  }
+
+  async reconcileLoop(): Promise<void> {
+    log.info('Reconciling CONTAINER_REGISTRIES')
+    const customRessources = await this.containerRegistryCleanupJobService.getCustomResources(CONTAINER_REGISTRIES)
+    customRessources.forEach(async (resource) => this.reconcile(resource))
   }
 
   async reconcile(obj: ContainerRegistryData): Promise<void> {

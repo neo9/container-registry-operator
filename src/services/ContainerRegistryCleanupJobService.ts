@@ -9,6 +9,10 @@ export class ContainerRegistryCleanupJobService {
     this.containerRegistryCleanupJob = new ContainerRegistryCleanupJobRepository()
   }
 
+  public async getCustomResources(cr: string): Promise<any[]> {
+    return (await this.containerRegistryCleanupJob.getAllCrds(cr)).body!.items!
+  }
+
   public async getCrdsByEnv(env: string): Promise<any[]> {
     return (await this.containerRegistryCleanupJob.getAllCrds(CONTAINER_REGISTRIES)).body!.items!.filter(
       (item: any) => item.metadata.labels.environnement! === env,
