@@ -1,15 +1,18 @@
 import { CONTAINER_REGISTRIES_CLEANUP_JOB, NAMESPACE } from '../constants'
 import { ContainerRegistryCleanupJobData } from '../models/ContainerRegistryCleanupJobData'
 import { ContainerRegistryCleanupJobService } from '../services/ContainerRegistryCleanupJobService'
+import { ContainerRegistryService } from '../services/ContainerRegistryService'
 import { log } from '../utils/logger'
 import Operator from './Operator'
 
 export class ContainerRegistryCleanupJobController extends Operator {
   private containerRegistryCleanupJobService: ContainerRegistryCleanupJobService
+  private containerRegistryService: ContainerRegistryService
 
   constructor() {
     super(CONTAINER_REGISTRIES_CLEANUP_JOB)
     this.containerRegistryCleanupJobService = new ContainerRegistryCleanupJobService()
+    this.containerRegistryService = new ContainerRegistryService()
   }
 
   async reconcileLoop(): Promise<void> {
@@ -33,10 +36,12 @@ export class ContainerRegistryCleanupJobController extends Operator {
      */
     customObjects.forEach(async (customObject) => {
       const cronName = obj.metadata.name!.concat('-').concat(customObject.metadata!.name!).concat('-cron-job')
-      if (!(await this.containerRegistryCleanupJobService.checkCronJobExist(cronName, NAMESPACE))) {
-        await this.containerRegistryCleanupJobService.createCronJob(cronName, NAMESPACE, obj, customObject)
-      } else {
-        await this.containerRegistryCleanupJobService.updateCronJob(cronName, NAMESPACE, obj, customObject)
+      if (await this.containerRegistryService.checkSecretExist(customObject.metadata!.name!.concat('-registry-credentials'), NAMESPACE)) {
+        if (!(await this.containerRegistryCleanupJobService.checkCronJobExist(cronName, NAMESPACE))) {
+          await this.containerRegistryCleanupJobService.createCronJob(cronName, NAMESPACE, obj, customObject)
+        } else {
+          await this.containerRegistryCleanupJobService.updateCronJob(cronName, NAMESPACE, obj, customObject)
+        }
       }
     })
   }

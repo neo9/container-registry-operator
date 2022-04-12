@@ -3,7 +3,7 @@ import { ContainerRegistryData } from '../models/ContainerRegistryData'
 import { ContainerRegistryCleanupJobService } from '../services/ContainerRegistryCleanupJobService'
 import { ContainerRegistryService } from '../services/ContainerRegistryService'
 import { encode, decode } from '../utils/base64Helper'
-import { log, pretty_log } from '../utils/logger'
+import { log } from '../utils/logger'
 import { wait } from '../utils/wait'
 import Operator from './Operator'
 export class ContainerRegistryController extends Operator {
@@ -31,7 +31,7 @@ export class ContainerRegistryController extends Operator {
       registryCredentials = obj.spec!.gcrAccessData
     } else if (obj.spec!.secretRef) {
       while (!(await this.containerRegistryService.checkSecretExist(obj.spec!.secretRef, NAMESPACE))) {
-        log.error(`${obj.spec!.secretRef} not found ...`)
+        log.error(`${obj.spec!.secretRef} not found for ${obj.metadata.name!} ... rechecking in 1min`)
         await wait(60000) //wait 1 minute to check again
       }
       registryCredentials = decode(
@@ -47,8 +47,20 @@ export class ContainerRegistryController extends Operator {
       namespaces = (await this.containerRegistryService.getAllNamespaces())!.items
         .filter((namespace) => namespace.status!.phase == 'Active')
         .map((namespace) => namespace.metadata!.name!)
-    } else {
+    } else if (obj.spec!.namespaces && obj.spec!.namespaces.length) {
       namespaces = obj.spec!.namespaces
+    } else {
+      /**
+       * since we have an empty array we have to clean
+       */
+      ;(await this.containerRegistryService.getAllNamespaces())!.items
+        .filter((namespace) => namespace.status!.phase == 'Active')
+        .filter((namespace) => namespace.metadata!.name! != NAMESPACE)
+        .map((namespace) => namespace.metadata!.name!)
+        .forEach(async (namespace) => {
+          await this.containerRegistryService.deleteSecretByLabelCreatedBy(namespace, obj.metadata.name!)
+        })
+      namespaces = []
     }
 
     /**
@@ -70,15 +82,13 @@ export class ContainerRegistryController extends Operator {
       )
 
       // creating the secret
-      if (obj.spec!.gcrAccessData) {
-        await this.containerRegistryService.createSecret(
-          obj.metadata.name!.concat('-registry-credentials'),
-          NAMESPACE,
-          obj.metadata.name!,
-          { 'gcr-admin.json': encode(registryCredentials!) },
-          'Opaque',
-        )
-      }
+      await this.containerRegistryService.createSecret(
+        obj.metadata.name!.concat('-registry-credentials'),
+        NAMESPACE,
+        obj.metadata.name!,
+        { 'gcr-admin.json': encode(registryCredentials!) },
+        'Opaque',
+      )
 
       // sync with cleanup job
       await this.containerRegistryCleanupJobService.sync(obj, NAMESPACE, 'ADD')
@@ -95,8 +105,13 @@ export class ContainerRegistryController extends Operator {
                 obj.metadata.name!,
                 /* eslint-disable-next-line quotes */
                 /* prettier-ignore */
-                { ".dockerconfigjson": `${encode((this.createImagePullSecret(registryCredentials!, obj)))}` },
+                { ".dockerconfigjson": `${encode((this.containerRegistryService.createImagePullSecret(registryCredentials!, obj)))}` },
                 'kubernetes.io/dockerconfigjson',
+              )
+              await this.containerRegistryService.addImagePullSecretToServiceAccount(
+                'default',
+                namespace,
+                obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret'),
               )
             } else {
               if (
@@ -109,7 +124,7 @@ export class ContainerRegistryController extends Operator {
                   await this.containerRegistryService.secretHasChanged(
                     obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret'),
                     namespace,
-                    `${encode(this.createImagePullSecret(registryCredentials!, obj))}`,
+                    `${encode(this.containerRegistryService.createImagePullSecret(registryCredentials!, obj))}`,
                   )
                 ) {
                   //secret is still using old name but data has changed
@@ -118,10 +133,10 @@ export class ContainerRegistryController extends Operator {
                     namespace,
                     /* eslint-disable-next-line quotes */
                     /* prettier-ignore */
-                    { ".dockerconfigjson": `${encode((this.createImagePullSecret(registryCredentials!, obj)))}` },
+                    { ".dockerconfigjson": `${encode((this.containerRegistryService.createImagePullSecret(registryCredentials!, obj)))}` },
                   )
                 } else {
-                  log.verbose(`${obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret')} did not change`)
+                  log.verbose(`secret ${obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret')} did not change in ${namespace}`)
                 }
               } else {
                 /**
@@ -131,14 +146,20 @@ export class ContainerRegistryController extends Operator {
                  */
                 const secretname = (await this.containerRegistryService.getSecretByCreater(obj.metadata.name!, namespace))?.metadata!.name!
                 await this.containerRegistryService.deleteSecret(secretname, namespace)
+                await this.containerRegistryService.deleteImagePullSecretFromServiceAccount('default', namespace, secretname)
                 await this.containerRegistryService.createSecret(
                   obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret'),
                   namespace,
                   obj.metadata.name!,
                   /* eslint-disable-next-line quotes */
                   /* prettier-ignore */
-                  { ".dockerconfigjson": `${encode((this.createImagePullSecret(registryCredentials!, obj)))}` },
+                  { ".dockerconfigjson": `${encode((this.containerRegistryService.createImagePullSecret(registryCredentials!, obj)))}` },
                   'kubernetes.io/dockerconfigjson',
+                )
+                await this.containerRegistryService.addImagePullSecretToServiceAccount(
+                  'default',
+                  namespace,
+                  obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret'),
                 )
               }
             }
@@ -154,12 +175,22 @@ export class ContainerRegistryController extends Operator {
        * updating all needed data
        * starting with the configmap
        */
-      await this.containerRegistryService.updateConfigMap(
-        obj.metadata.name!.concat('-config'),
-        NAMESPACE,
-        'config.json',
-        `{"hostname": "${obj.spec!.hostname}", "project": "${obj.spec!.project}"}`,
-      )
+      if (
+        await this.containerRegistryService.configMapHasChanged(
+          obj.metadata.name!.concat('-config'),
+          NAMESPACE,
+          `{"hostname": "${obj.spec!.hostname}", "project": "${obj.spec!.project}"}`,
+        )
+      ) {
+        await this.containerRegistryService.updateConfigMap(
+          obj.metadata.name!.concat('-config'),
+          NAMESPACE,
+          'config.json',
+          `{"hostname": "${obj.spec!.hostname}", "project": "${obj.spec!.project}"}`,
+        )
+      } else {
+        log.verbose(`configmap "${obj.metadata.name!.concat('-config')}" did not change in ${NAMESPACE}`)
+      }
 
       //managing registry credentials secret
       if (obj.spec!.gcrAccessData) {
@@ -174,23 +205,45 @@ export class ContainerRegistryController extends Operator {
           )
         } else {
           //update secret
-          await this.containerRegistryService.updateSecret(obj.metadata.name!.concat('-registry-credentials'), NAMESPACE, {
-            'gcr-admin.json': encode(registryCredentials!),
-          })
+          if (
+            await this.containerRegistryService.secretHasChanged(
+              obj.metadata.name!.concat('-registry-credentials'),
+              NAMESPACE,
+              `${encode(registryCredentials!)}`,
+            )
+          ) {
+            await this.containerRegistryService.updateSecret(obj.metadata.name!.concat('-registry-credentials'), NAMESPACE, {
+              'gcr-admin.json': encode(registryCredentials!),
+            })
+          } else {
+            log.verbose(`secret ${obj.metadata.name!.concat('-registry-credentials')} did not change in ${NAMESPACE}`)
+          }
         }
       } else if (obj.spec!.secretRef) {
         // if we were using gcrAccessData and switched to secretRef, delete old secret
         if (await this.containerRegistryService.checkSecretExist(obj.metadata.name!.concat('-registry-credentials'), NAMESPACE)) {
-          await this.containerRegistryService.deleteSecret(obj.metadata.name!.concat('-registry-credentials'), NAMESPACE)
+          if (
+            await this.containerRegistryService.secretHasChanged(
+              obj.metadata.name!.concat('-registry-credentials'),
+              NAMESPACE,
+              `${encode(registryCredentials!)}`,
+            )
+          ) {
+            await this.containerRegistryService.updateSecret(obj.metadata.name!.concat('-registry-credentials'), NAMESPACE, {
+              'gcr-admin.json': encode(registryCredentials!),
+            })
+          } else {
+            log.verbose(`secert ${obj.metadata.name!.concat('-registry-credentials')} did not change in ${NAMESPACE}`)
+          }
+        } else {
+          await this.containerRegistryService.createSecret(
+            obj.metadata.name!.concat('-registry-credentials'),
+            NAMESPACE,
+            obj.metadata.name!,
+            { 'gcr-admin.json': encode(registryCredentials!) },
+            'Opaque',
+          )
         }
-        //create new secret
-        await this.containerRegistryService.createSecret(
-          obj.metadata.name!.concat('-registry-credentials'),
-          NAMESPACE,
-          obj.metadata.name!,
-          { 'gcr-admin.json': encode(registryCredentials!) },
-          'Opaque',
-        )
       }
 
       //sync with cleanup job
@@ -208,8 +261,13 @@ export class ContainerRegistryController extends Operator {
                 obj.metadata.name!,
                 /* eslint-disable-next-line quotes */
                 /* prettier-ignore */
-                { ".dockerconfigjson": `${encode((this.createImagePullSecret(registryCredentials!, obj)))}` },
+                { ".dockerconfigjson": `${encode((this.containerRegistryService.createImagePullSecret(registryCredentials!, obj)))}` },
                 'kubernetes.io/dockerconfigjson',
+              )
+              await this.containerRegistryService.addImagePullSecretToServiceAccount(
+                'default',
+                namespace,
+                obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret'),
               )
             } else {
               //else update imagePullSecret
@@ -223,7 +281,7 @@ export class ContainerRegistryController extends Operator {
                   await this.containerRegistryService.secretHasChanged(
                     obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret'),
                     namespace,
-                    `${encode(this.createImagePullSecret(registryCredentials!, obj))}`,
+                    `${encode(this.containerRegistryService.createImagePullSecret(registryCredentials!, obj))}`,
                   )
                 ) {
                   //secret is still using old name but data has changed
@@ -232,24 +290,30 @@ export class ContainerRegistryController extends Operator {
                     namespace,
                     /* eslint-disable-next-line quotes */
                     /* prettier-ignore */
-                    { ".dockerconfigjson": `${encode((this.createImagePullSecret(registryCredentials!, obj)))}` },
+                    { ".dockerconfigjson": `${encode((this.containerRegistryService.createImagePullSecret(registryCredentials!, obj)))}` },
                   )
                 } else {
-                  log.verbose(`${obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret')} did not change`)
+                  log.verbose(`secret ${obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret')} did not change in ${namespace}`)
                 }
               } else {
                 //secret is using a new name, so get secret by label app.kubernetes.io/created-by
                 // delete old secret and create new
                 const secretname = (await this.containerRegistryService.getSecretByCreater(obj.metadata.name!, namespace))?.metadata!.name!
                 await this.containerRegistryService.deleteSecret(secretname, namespace)
+                await this.containerRegistryService.deleteImagePullSecretFromServiceAccount('default', namespace, secretname)
                 await this.containerRegistryService.createSecret(
                   obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret'),
                   namespace,
                   obj.metadata.name!,
                   /* eslint-disable-next-line quotes */
                   /* prettier-ignore */
-                  { ".dockerconfigjson": `${encode((this.createImagePullSecret(registryCredentials!, obj)))}` },
+                  { ".dockerconfigjson": `${encode((this.containerRegistryService.createImagePullSecret(registryCredentials!, obj)))}` },
                   'kubernetes.io/dockerconfigjson',
+                )
+                await this.containerRegistryService.addImagePullSecretToServiceAccount(
+                  'default',
+                  namespace,
+                  obj.spec!.secretName || obj.metadata.name!.concat('-image-pull-secret'),
                 )
               }
             }
@@ -263,7 +327,7 @@ export class ContainerRegistryController extends Operator {
             let allNamespaces = await this.containerRegistryService.getAllNamespaces()
             allNamespaces?.items.forEach(async (namespace) => {
               if (!namespaces.includes(namespace.metadata!.name!) && namespace.metadata!.name! !== NAMESPACE) {
-                await this.deleteSecretByLabelCreatedBy(namespace.metadata!.name!, obj.metadata.name!)
+                await this.containerRegistryService.deleteSecretByLabelCreatedBy(namespace.metadata!.name!, obj.metadata.name!)
               }
             })
           } else {
@@ -292,60 +356,7 @@ export class ContainerRegistryController extends Operator {
 
     let allNamespaces = await this.containerRegistryService.getAllNamespaces()
     allNamespaces?.items.forEach(async (namespace) => {
-      await this.deleteSecretByLabelCreatedBy(namespace.metadata!.name!, obj.metadata.name!)
-    })
-  }
-
-  createImagePullSecret(registryCredentials: string, obj: ContainerRegistryData): string {
-    if (obj.spec?.imageRegistry?.toLowerCase() == 'gcr') {
-      return this.createSecretDataForDockerConfigJsonFromServiceAccount(registryCredentials, obj)
-    } else if (obj.spec?.imageRegistry?.toLowerCase() == 'docker') {
-      return this.createSecretDataForDockerConfigJsonFromDockerCredentials(registryCredentials, obj)
-    }
-    log.error(`${obj.spec?.imageRegistry?.toLowerCase()} is not supported ...`)
-    throw new Error('not supported')
-  }
-
-  createSecretDataForDockerConfigJsonFromDockerCredentials(registryCredentials: string, obj: ContainerRegistryData): string {
-    const registryCredentialsObject = JSON.parse(registryCredentials)
-    const auth = encode(`${JSON.stringify(registryCredentialsObject.username)}:${JSON.stringify(registryCredentialsObject.password)}`)
-    return `{
-      "auths": {
-        "${obj.spec!.hostname}": {
-          "username": ${JSON.stringify(registryCredentialsObject.username)},
-          "password": ${JSON.stringify(registryCredentialsObject.password)},
-          "email": ${JSON.stringify(registryCredentialsObject.email)},
-          "auth" : "${auth}"
-        }
-      }
-    }`
-  }
-
-  createSecretDataForDockerConfigJsonFromServiceAccount(registryCredentials: string, obj: ContainerRegistryData): string {
-    return `{
-      "auths": {
-        "${obj.spec!.hostname}": {
-          "username": "_json_key",
-          "password": ${JSON.stringify(registryCredentials)},
-          "auth" : "${encode(JSON.stringify(registryCredentials))}"
-        }
-      }
-    }`
-  }
-
-  /**
-   * this method check the secrets in a namespace
-   * if there is a secret created by the CustomRessource it will delete it
-   */
-  async deleteSecretByLabelCreatedBy(namespaceName: string, crName: string): Promise<void> {
-    const secrets = await this.containerRegistryService.getSecretsByNamspace(namespaceName)
-    secrets?.body.items.forEach(async (secret) => {
-      if (secret.metadata!.labels && secret.metadata!.labels['app.kubernetes.io/created-by']) {
-        if (secret.metadata!.labels['app.kubernetes.io/created-by'] === crName) {
-          const secretname = (await this.containerRegistryService.getSecretByCreater(crName, namespaceName))?.metadata!.name!
-          await this.containerRegistryService.deleteSecret(secretname, namespaceName)
-        }
-      }
+      await this.containerRegistryService.deleteSecretByLabelCreatedBy(namespace.metadata!.name!, obj.metadata.name!)
     })
   }
 }

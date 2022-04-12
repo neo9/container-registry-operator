@@ -1,12 +1,15 @@
 import { CONTAINER_REGISTRIES, CONTAINER_REGISTRIES_CLEANUP_JOB } from '../constants'
 import { ContainerRegistryCleanupJobData } from '../models/ContainerRegistryCleanupJobData'
 import { ContainerRegistryCleanupJobRepository } from '../repositories/ContainerRegistryCleanupJobRepository'
+import { ContainerRegistryService } from './ContainerRegistryService'
 
 export class ContainerRegistryCleanupJobService {
   private containerRegistryCleanupJob: ContainerRegistryCleanupJobRepository
+  private containerRegistryService: ContainerRegistryService
 
   constructor() {
     this.containerRegistryCleanupJob = new ContainerRegistryCleanupJobRepository()
+    this.containerRegistryService = new ContainerRegistryService()
   }
 
   public async getCustomResources(cr: string): Promise<any[]> {
@@ -49,8 +52,12 @@ export class ContainerRegistryCleanupJobService {
             cleanupjob.spec?.selector?.registrySelector?.environnement === registryCustomObject.metadata?.labels?.environnement ||
             cleanupjob.spec?.selector?.registrySelector?.registry === registryCustomObject.metadata?.labels?.registry
           ) {
-            if (!(await this.containerRegistryCleanupJob.checkCronJobExist(cronName, namespace))) {
-              await this.containerRegistryCleanupJob.createCronJob(cronName, namespace, cleanupjob, registryCustomObject)
+            if (
+              await this.containerRegistryService.checkSecretExist(registryCustomObject.metadata!.name!.concat('-registry-credentials'), namespace)
+            ) {
+              if (!(await this.containerRegistryCleanupJob.checkCronJobExist(cronName, namespace))) {
+                await this.containerRegistryCleanupJob.createCronJob(cronName, namespace, cleanupjob, registryCustomObject)
+              }
             }
           }
           break
@@ -59,8 +66,12 @@ export class ContainerRegistryCleanupJobService {
             cleanupjob.spec?.selector?.registrySelector?.environnement === registryCustomObject.metadata?.labels?.environnement ||
             cleanupjob.spec?.selector?.registrySelector?.registry === registryCustomObject.metadata?.labels?.registry
           ) {
-            if (!(await this.containerRegistryCleanupJob.checkCronJobExist(cronName, namespace))) {
-              await this.containerRegistryCleanupJob.createCronJob(cronName, namespace, cleanupjob, registryCustomObject)
+            if (
+              await this.containerRegistryService.checkSecretExist(registryCustomObject.metadata!.name!.concat('-registry-credentials'), namespace)
+            ) {
+              if (!(await this.containerRegistryCleanupJob.checkCronJobExist(cronName, namespace))) {
+                await this.containerRegistryCleanupJob.createCronJob(cronName, namespace, cleanupjob, registryCustomObject)
+              }
             }
           } else {
             if (await this.containerRegistryCleanupJob.checkCronJobExist(cronName, namespace)) {

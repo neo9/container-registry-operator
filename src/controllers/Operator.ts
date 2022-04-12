@@ -35,8 +35,7 @@ export default abstract class Operator {
     )
   }
 
-  onDone(err: any) {
-    log.error(`Connection closed. ${err}`)
+  onDone() {
     this.start()
   }
 
