@@ -9,17 +9,6 @@ rules:
     resources:
       - container-registries-cleanupjob
       - container-registries
-    verbs:
-      - create
-      - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch
-  - apiGroups:
-      - neo9.io
-    resources:
       - container-registries-cleanupjob/status
       - container-registries/status
     verbs:
@@ -30,40 +19,32 @@ rules:
       - patch
       - update
       - watch
-  - apiGroups:
-      - apps
-    verbs:
-      - create
-      - delete
-      - deletecollection
-      - get
-      - list
-      - patch
-      - update
-      - watch
-    resources:
-      - daemonsets
-      - deployments
-      - deployments/rollback
-      - deployments/scale
-      - replicasets
-      - replicasets/scale
-      - statefulsets
-      - statefulsets/scale
+
   - apiGroups:
       - ''
+    resources:
+      - secrets
+      - configmaps
+      - serviceaccounts
+      - namespaces
     verbs:
       - create
       - delete
-      - deletecollection
       - get
       - list
       - patch
       - update
       - watch
+
+  - apiGroups:
+      - batch
     resources:
-      - pods
-      - secrets
-  - apiGroups: ['', 'extensions', 'apps', 'batch']
-    resources: ['*']
-    verbs: ['*']
+      - cronjobs
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
