@@ -139,7 +139,7 @@ export class ContainerRegistryService {
     }
     if (!serviceAccount!.imagePullSecrets.map((sa) => sa.name).includes(imagePullSecret)) {
       serviceAccount!.imagePullSecrets.push({ name: imagePullSecret })
-      await this.containerRegistryRepository.patchServiceAccount(SAname, namespace, Object.assign({}, serviceAccount))
+      await this.containerRegistryRepository.patchServiceAccount(SAname, namespace, Object.assign({}, serviceAccount!))
     } else {
       log.verbose(`${imagePullSecret} already exist in ${SAname} of ${namespace}`)
     }
@@ -153,7 +153,7 @@ export class ContainerRegistryService {
     if (serviceAccount!.imagePullSecrets!.map((sa) => sa.name).includes(imagePullSecret)) {
       const index = serviceAccount!.imagePullSecrets!.map((sa) => sa.name).indexOf(imagePullSecret)
       serviceAccount!.imagePullSecrets!.splice(index, 1)
-      await this.containerRegistryRepository.patchServiceAccount(SAname, namespace, Object.assign({}, serviceAccount))
+      await this.containerRegistryRepository.patchServiceAccount(SAname, namespace, Object.assign({}, serviceAccount!))
     } else {
       log.verbose(`${imagePullSecret} does not exist in ${SAname} of ${namespace}`)
     }

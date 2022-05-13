@@ -8,23 +8,28 @@ import Operator from './Operator'
 export class ContainerRegistryCleanupJobController extends Operator {
   private containerRegistryCleanupJobService: ContainerRegistryCleanupJobService
   private containerRegistryService: ContainerRegistryService
+  private canReconcile: boolean
 
   constructor() {
     super(CONTAINER_REGISTRIES_CLEANUP_JOB)
     this.containerRegistryCleanupJobService = new ContainerRegistryCleanupJobService()
     this.containerRegistryService = new ContainerRegistryService()
+    this.canReconcile = true
   }
 
   async reconcileLoop(): Promise<void> {
-    log.info('Reconciling CONTAINER_REGISTRIES_CLEANUP_JOB')
-    const customRessources = await this.containerRegistryCleanupJobService.getCustomResources(CONTAINER_REGISTRIES_CLEANUP_JOB)
-    customRessources.forEach(async (resource) => this.reconcile(resource))
+    if (this.canReconcile) {
+      log.info('Reconciling CONTAINER_REGISTRIES_CLEANUP_JOB')
+      const customRessources = await this.containerRegistryCleanupJobService.getCustomResources(CONTAINER_REGISTRIES_CLEANUP_JOB)
+      customRessources.forEach(async (resource) => this.reconcile(resource))
+    }
   }
 
   async reconcile(obj: ContainerRegistryCleanupJobData): Promise<void> {
     /**
      * Get all customRessources by selector
      */
+    this.canReconcile = false
     let customObjects: any[] = []
     if (obj.spec!.selector!.registrySelector!.environnement) {
       customObjects.push(...(await this.containerRegistryCleanupJobService.getCrdsByEnv(obj.spec!.selector!.registrySelector!.environnement)))
@@ -44,6 +49,7 @@ export class ContainerRegistryCleanupJobController extends Operator {
         }
       }
     })
+    this.canReconcile = true
   }
 
   /**

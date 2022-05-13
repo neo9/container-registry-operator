@@ -19,7 +19,7 @@ spec:
       containers:
         - env:
             - name: DEV_MODE
-              value: 'false'
+              value: 'true'
           image: neo9/container-registry-operator:latest
           resources:
             requests:
