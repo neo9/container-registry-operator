@@ -18,7 +18,7 @@
             "containers": [
               {
                 "name": "container-registry-cleaner",
-                "image": "index.docker.io/neo9sas/container-registry-cleaner@sha256:72c925aec888080c1c1397dacdcdc642cdd2b0f1ce18dabfbf632889184dbccd",
+                "image": "ihebchakroun/container-registry-cleaner:v0.1.0",
                 "imagePullPolicy": "IfNotPresent",
                 "command": ["container-registry-cleaner"],
                 "args": ["--help"],
