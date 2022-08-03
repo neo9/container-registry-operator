@@ -18,7 +18,7 @@
             "containers": [
               {
                 "name": "container-registry-cleaner",
-                "image": "ihebchakroun/container-registry-cleaner:v0.1.0",
+                "image": "ihebchakroun/container-registry-cleaner:v0.1.1",
                 "imagePullPolicy": "IfNotPresent",
                 "command": ["container-registry-cleaner"],
                 "args": ["--help"],
