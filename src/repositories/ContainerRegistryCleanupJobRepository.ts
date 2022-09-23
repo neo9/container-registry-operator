@@ -2,6 +2,7 @@ import { BatchV1beta1Api, CustomObjectsApi, KubeConfig, V1beta1CronJob, V1beta1C
 import * as fs from 'fs'
 import { CONTAINER_REGISTRY_GROUP, CONTAINER_REGISTRY_VERSION, NAMESPACE } from '../constants'
 import { ContainerRegistryCleanupJobData } from '../models/ContainerRegistryCleanupJobData'
+import { handleError } from '../utils/handleError'
 import { log } from '../utils/logger'
 
 export class ContainerRegistryCleanupJobRepository {
@@ -20,7 +21,7 @@ export class ContainerRegistryCleanupJobRepository {
     try {
       return await this.k8sCustomObjectApi.listNamespacedCustomObject(CONTAINER_REGISTRY_GROUP, CONTAINER_REGISTRY_VERSION, NAMESPACE, plural)
     } catch (error) {
-      log.error(`error while fetching all ${plural} in ${NAMESPACE}: \n${JSON.stringify(error)}`)
+      handleError(error, `source: error while fetching all custom ressources "${plural}"`)
     }
   }
 
@@ -35,18 +36,18 @@ export class ContainerRegistryCleanupJobRepository {
 
   public async deleteCronJob(name: string, namespace: string): Promise<boolean> {
     try {
-      log.verbose(`Deleting ${name}`)
+      log.trace(`Deleting ${name}`)
       await this.k8sBatchV1beta1Api.deleteNamespacedCronJob(name, namespace)
       return true
     } catch (error) {
-      log.error(`error while deleting cronjob ${name} in ${namespace}: \n${JSON.stringify(error)}`)
+      handleError(error, `source: error while deleting cronjob "${name}" from namespace "${namespace}"`)
       return false
     }
   }
 
   public async createCronJob(name: string, namespace: string, customRessource: ContainerRegistryCleanupJobData, customObject: any) {
     try {
-      log.verbose(`creating cronjob "${name}" in "${namespace}"`)
+      log.trace(`creating cronjob "${name}" in "${namespace}"`)
       const cronTemplate = fs.readFileSync('templates/cronjob.json', 'utf-8')
       const newCronJob: V1beta1CronJob = JSON.parse(cronTemplate)
       newCronJob.metadata!.name = name
@@ -57,13 +58,13 @@ export class ContainerRegistryCleanupJobRepository {
         customObject.metadata!.name!.concat('-registry-credentials')
       return this.k8sBatchV1beta1Api.createNamespacedCronJob(namespace, newCronJob)
     } catch (error) {
-      log.error(`error while creating cronjob ${name} in ${namespace}: \n${JSON.stringify(error)}`)
+      handleError(error, `source: error while creating cronjob "${name}" in namespace "${namespace}"`)
     }
   }
 
   public async updateCronJob(name: string, namespace: string, myCustomResource: ContainerRegistryCleanupJobData, customObject: any) {
     try {
-      log.verbose(`updating cronjob "${name}" in "${namespace}"`)
+      log.trace(`updating cronjob "${name}" in "${namespace}"`)
       const response_cron = await this.k8sBatchV1beta1Api.readNamespacedCronJob(name, namespace)
       const cronJob: V1beta1CronJob = response_cron.body
       cronJob.spec!.schedule = myCustomResource.spec!.schedule
@@ -72,7 +73,7 @@ export class ContainerRegistryCleanupJobRepository {
       cronJob.spec!.jobTemplate!.spec!.template!.spec!.volumes![1].secret!.secretName = customObject.metadata!.name!.concat('-registry-credentials')
       await this.k8sBatchV1beta1Api.replaceNamespacedCronJob(name, namespace, cronJob)
     } catch (error) {
-      log.error(`error while updating cronjob ${name} in ${namespace}: \n${JSON.stringify(error)}`)
+      handleError(error, `source: error while updating cronjob ${name} in namespace ${namespace}`)
     }
   }
 
@@ -82,7 +83,7 @@ export class ContainerRegistryCleanupJobRepository {
       const cronJob: V1beta1CronJobList = response_cron.body
       return cronJob
     } catch (error) {
-      log.error(`error while fetching cronjobs in ${namespace}: \n${JSON.stringify(error)}`)
+      handleError(error, `source: error while fetching all cronjobs from namespace ${namespace}`)
     }
   }
 }

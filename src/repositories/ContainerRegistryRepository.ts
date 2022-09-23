@@ -1,5 +1,6 @@
 import { CoreV1Api, KubeConfig, V1ConfigMap, V1Namespace, V1Secret, V1ServiceAccount } from '@kubernetes/client-node'
 import * as fs from 'fs'
+import { handleError } from '../utils/handleError'
 import { log } from '../utils/logger'
 
 export class ContainerRegistryRepository {
@@ -23,7 +24,7 @@ export class ContainerRegistryRepository {
 
   public async createConfigMap(name: string, namespace: string, createdby: string, attributename: string, data: any) {
     try {
-      log.verbose(`creating configmap "${name}" in "${namespace}"`)
+      log.trace(`creating configmap "${name}" in "${namespace}"`)
       const config = fs.readFileSync('templates/configMap.json', 'utf-8')
       const newConfigMap: V1ConfigMap = JSON.parse(config)
       newConfigMap.metadata!.name = name
@@ -31,7 +32,7 @@ export class ContainerRegistryRepository {
       newConfigMap.data![attributename] = data
       return await this.k8sApiPods.createNamespacedConfigMap(namespace, newConfigMap)
     } catch (error) {
-      log.error(`error while creating configmap ${name} in ${namespace}: \n${JSON.stringify(error)}`)
+      handleError(error, `source: error while creating configmap ${name} in namespace ${namespace}`)
     }
   }
 
@@ -41,29 +42,29 @@ export class ContainerRegistryRepository {
       const configMap: V1ConfigMap = response_config.body
       return configMap
     } catch (error) {
-      log.error(`error while fetching configmap ${name} in ${namespace}: \n${JSON.stringify(error)}`)
+      handleError(error, `source: error while fetching configmap ${name} from namespace ${namespace}`)
     }
   }
 
   public async updateConfigMap(name: string, namespace: string, attributename: string, data: any) {
     try {
-      log.verbose(`updating configmap "${name}" in "${namespace}"`)
+      log.trace(`updating configmap "${name}" in "${namespace}"`)
       const response_config = await this.k8sApiPods.readNamespacedConfigMap(name, namespace)
       const configMap: V1ConfigMap = response_config.body
       configMap.data![attributename] = data
       await this.k8sApiPods.replaceNamespacedConfigMap(name, namespace, configMap)
     } catch (error) {
-      log.error(`error while updating configmap ${name} in ${namespace}: \n${JSON.stringify(error)}`)
+      handleError(error, `source: error while updating configmap ${name} in namespace ${namespace}`)
     }
   }
 
   public async deleteConfigMap(name: string, namespace: string): Promise<boolean> {
     try {
-      log.verbose(`deleting configmap "${name}" from "${namespace}"`)
+      log.trace(`deleting configmap "${name}" from "${namespace}"`)
       await this.k8sApiPods.deleteNamespacedConfigMap(name, namespace)
       return true
     } catch (error) {
-      log.error(`error while deleting configmap ${name} in ${namespace}: \n${JSON.stringify(error)}`)
+      handleError(error, `source: error while deleting configmap ${name} in namespace ${namespace}`)
       return false
     }
   }
@@ -81,7 +82,7 @@ export class ContainerRegistryRepository {
     try {
       return await this.k8sApiPods.readNamespacedSecret(name, namespace)
     } catch (error) {
-      log.error(`could not find secret ${name} in ${namespace}: \n${JSON.stringify(error)}`)
+      handleError(error, `source: error while fetching secret ${name} in namespace ${namespace}`)
     }
   }
 
@@ -98,7 +99,7 @@ export class ContainerRegistryRepository {
         }).length > 0
       )
     } catch (error) {
-      log.verbose(`${createdby} has no secrets in ${namespace}`)
+      log.trace(`${createdby} has no secrets in ${namespace}`)
     }
   }
 
@@ -113,13 +114,13 @@ export class ContainerRegistryRepository {
         }
       })[0]
     } catch (error) {
-      log.error(`could not fetch secrets created by ${createdby} in ${namespace}: \n${JSON.stringify(error)}`)
+      handleError(error, `source: error while fetching secret created by ${createdby} in namespace ${namespace}`)
     }
   }
 
   public async createSecret(name: string, namespace: string, createdby: string, data: any, type: string) {
     try {
-      log.verbose(`creating secret "${name}" in "${namespace}"`)
+      log.trace(`creating secret "${name}" in "${namespace}"`)
       const secretGcrAdmin = fs.readFileSync('templates/secret.json', 'utf-8')
       const newGcrAdmin: V1Secret = JSON.parse(secretGcrAdmin)
       newGcrAdmin.metadata!.name = name
@@ -128,19 +129,19 @@ export class ContainerRegistryRepository {
       newGcrAdmin.metadata!.labels!['app.kubernetes.io/created-by'] = createdby
       return await this.k8sApiPods.createNamespacedSecret(namespace, newGcrAdmin)
     } catch (error) {
-      log.error(`could not create secret ${name} in ${namespace}: \n${JSON.stringify(error)}`)
+      handleError(error, `source: error while creating secret ${name} in namespace ${namespace}`)
     }
   }
 
   public async updateSecret(name: string, namespace: string, data: any) {
     try {
-      log.verbose(`updating secret "${name}" in "${namespace}"`)
+      log.trace(`updating secret "${name}" in "${namespace}"`)
       const response_secret_gcrAdmin = await this.k8sApiPods.readNamespacedSecret(name, namespace)
       const gcrAdmin: V1Secret = response_secret_gcrAdmin.body
       gcrAdmin.data = data
       await this.k8sApiPods.replaceNamespacedSecret(name, namespace, gcrAdmin)
     } catch (error) {
-      log.error(`could not update secret ${name} in ${namespace}: \n${JSON.stringify(error)}`)
+      handleError(error, `source: error while updating secret ${name} in namespace ${namespace}`)
     }
   }
 
@@ -148,17 +149,17 @@ export class ContainerRegistryRepository {
     try {
       return await this.k8sApiPods.listNamespacedSecret(namespace)
     } catch (error) {
-      log.error(`no secrets found in namespace "${namespace}": \n${JSON.stringify(error)}`)
+      handleError(error, `source: error while fetching all secrets from namespace ${namespace}`)
     }
   }
 
   public async deleteSecret(name: string, namespace: string) {
     try {
-      log.verbose(`deleting secret "${name}" in "${namespace}"`)
+      log.trace(`deleting secret "${name}" in "${namespace}"`)
       await this.k8sApiPods.deleteNamespacedSecret(name, namespace)
       return true
     } catch (error) {
-      log.error(`could not delete secret ${name} in ${namespace}: \n${JSON.stringify(error)}`)
+      handleError(error, `source: error while deleting secret ${name} in namespace ${namespace}`)
       return false
     }
   }
@@ -176,21 +177,20 @@ export class ContainerRegistryRepository {
     try {
       return (await this.k8sApiPods.listNamespace()).body
     } catch (error) {
-      log.verbose(`no namespaces`)
-      log.error(JSON.stringify(error))
+      log.trace(`no namespaces`)
     }
   }
 
   public async createNamespace(namespace: string) {
     try {
-      log.verbose(`creating namespace "${namespace}"`)
+      log.trace(`creating namespace "${namespace}"`)
       const namespace_json = fs.readFileSync('templates/namespace.json', 'utf-8')
       const namespaceData: V1Namespace = JSON.parse(namespace_json)
       namespaceData.metadata!.name = namespace
-      log.verbose(`namespace "${namespace}" created`)
+      log.trace(`namespace "${namespace}" created`)
       return this.k8sApiPods.createNamespace(namespaceData)
     } catch (error) {
-      log.error(JSON.stringify(error))
+      handleError(error, `source: error while creating namespace namespace ${namespace}`)
     }
   }
 
@@ -198,16 +198,16 @@ export class ContainerRegistryRepository {
     try {
       return (await this.k8sApiPods.readNamespacedServiceAccount(name, namespace)).body
     } catch (error) {
-      log.error(`could not fetch service account ${name} in ${namespace}: \n${JSON.stringify(error)}`)
+      handleError(error, `source: error while fetching service account ${name} in namespace ${namespace}`)
     }
   }
 
   public async patchServiceAccount(name: string, namespace: string, body: object) {
     try {
-      log.verbose(`updating service account "${name}" in "${namespace}"`)
+      log.trace(`updating service account "${name}" in "${namespace}"`)
       await this.k8sApiPods.replaceNamespacedServiceAccount(name, namespace, body)
     } catch (error) {
-      log.error(`could not update service account ${name} in ${namespace}: \n${JSON.stringify(error)}`)
+      handleError(error, `source: error while patching service account ${name} in namespace ${namespace}`)
     }
   }
 }

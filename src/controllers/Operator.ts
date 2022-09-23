@@ -1,5 +1,6 @@
 import { KubeConfig, Watch } from '@kubernetes/client-node'
 import { CONTAINER_REGISTRY_GROUP, CONTAINER_REGISTRY_VERSION, NAMESPACE } from '../constants'
+import { handleError } from '../utils/handleError'
 import { log } from '../utils/logger'
 
 export default abstract class Operator {
@@ -64,6 +65,10 @@ export default abstract class Operator {
   abstract reconcileLoop(): Promise<void>
 }
 
-process.on('unhandledRejection', (reason, p) => {
-  log.error('Unhandled Rejection at: Promise', p, 'reason:', reason)
+process.on('unhandledRejection', (error: any, source: any) => {
+  handleError(error, source)
+})
+
+process.on('uncaughtException', (error: any, source: any) => {
+  handleError(error, source)
 })

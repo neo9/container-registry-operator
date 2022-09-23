@@ -141,7 +141,7 @@ export class ContainerRegistryService {
       serviceAccount!.imagePullSecrets.push({ name: imagePullSecret })
       await this.containerRegistryRepository.patchServiceAccount(SAname, namespace, Object.assign({}, serviceAccount!))
     } else {
-      log.verbose(`${imagePullSecret} already exist in ${SAname} of ${namespace}`)
+      log.trace(`${imagePullSecret} already exist in ${SAname} of ${namespace}`)
     }
   }
 
@@ -155,7 +155,7 @@ export class ContainerRegistryService {
       serviceAccount!.imagePullSecrets!.splice(index, 1)
       await this.containerRegistryRepository.patchServiceAccount(SAname, namespace, Object.assign({}, serviceAccount!))
     } else {
-      log.verbose(`${imagePullSecret} does not exist in ${SAname} of ${namespace}`)
+      log.trace(`${imagePullSecret} does not exist in ${SAname} of ${namespace}`)
     }
   }
 }

@@ -3,6 +3,7 @@ import { ContainerRegistryData } from '../models/ContainerRegistryData'
 import { ContainerRegistryCleanupJobService } from '../services/ContainerRegistryCleanupJobService'
 import { ContainerRegistryService } from '../services/ContainerRegistryService'
 import { encode, decode } from '../utils/base64Helper'
+import { handleError } from '../utils/handleError'
 import { log } from '../utils/logger'
 import { wait } from '../utils/wait'
 import Operator from './Operator'
@@ -35,6 +36,7 @@ export class ContainerRegistryController extends Operator {
      * store object in queue and treat it one by one
      * this avoid updating same ressource at the same time
      */
+
     this.reconcileObjs.push(object)
     while (this.reconcileObjs.length) {
       if (this.isRunning) {
@@ -43,7 +45,6 @@ export class ContainerRegistryController extends Operator {
         this.isRunning = true
         const obj = this.reconcileObjs.shift()
         //###################################
-
         /**
          * init credentials
          */
@@ -51,13 +52,20 @@ export class ContainerRegistryController extends Operator {
         if (obj!.spec!.gcrAccessData) {
           registryCredentials = obj!.spec!.gcrAccessData
         } else if (obj!.spec!.secretRef) {
-          while (!(await this.containerRegistryService.checkSecretExist(obj!.spec!.secretRef, NAMESPACE))) {
-            log.error(`${obj!.spec!.secretRef} not found for ${obj!.metadata.name!} ... rechecking in 1min`)
-            await wait(60000) //wait 1 minute to check again
+          if (!(await this.containerRegistryService.checkSecretExist(obj!.spec!.secretRef, NAMESPACE))) {
+            log.error(`${obj!.spec!.secretRef} not found for ${obj!.metadata.name!} ...`)
+            this.isRunning = false
+            continue
           }
-          registryCredentials = decode(
-            Object.values((await this.containerRegistryService.getSecretByName(obj!.spec!.secretRef, NAMESPACE))!.body!.data!)[0],
-          )
+          try {
+            registryCredentials = decode(
+              Object.values((await this.containerRegistryService.getSecretByName(obj!.spec!.secretRef, NAMESPACE))!.body!.data!)[0],
+            )
+          } catch (error) {
+            handleError(error, `source: error while parsing secret "${obj!.spec!.secretRef}" from namespace "${NAMESPACE}"`)
+            this.isRunning = false
+            continue
+          }
         }
         /**
          * init namespaces
@@ -157,9 +165,7 @@ export class ContainerRegistryController extends Operator {
                         { ".dockerconfigjson": `${encode((this.containerRegistryService.createImagePullSecret(registryCredentials!, obj!)))}` },
                       )
                     } else {
-                      log.verbose(
-                        `secret ${obj!.spec!.secretName || obj!.metadata.name!.concat('-image-pull-secret')} did not change in ${namespace}`,
-                      )
+                      log.trace(`secret ${obj!.spec!.secretName || obj!.metadata.name!.concat('-image-pull-secret')} did not change in ${namespace}`)
                     }
                   } else {
                     /**
@@ -212,7 +218,7 @@ export class ContainerRegistryController extends Operator {
               `{"hostname": "${obj!.spec!.hostname}", "project": "${obj!.spec!.project}"}`,
             )
           } else {
-            log.verbose(`configmap "${obj!.metadata.name!.concat('-config')}" did not change in ${NAMESPACE}`)
+            log.trace(`configmap "${obj!.metadata.name!.concat('-config')}" did not change in ${NAMESPACE}`)
           }
 
           //managing registry credentials secret
@@ -239,7 +245,7 @@ export class ContainerRegistryController extends Operator {
                   'gcr-admin.json': encode(registryCredentials!),
                 })
               } else {
-                log.verbose(`secret ${obj!.metadata.name!.concat('-registry-credentials')} did not change in ${NAMESPACE}`)
+                log.trace(`secret ${obj!.metadata.name!.concat('-registry-credentials')} did not change in ${NAMESPACE}`)
               }
             }
           } else if (obj!.spec!.secretRef) {
@@ -256,7 +262,7 @@ export class ContainerRegistryController extends Operator {
                   'gcr-admin.json': encode(registryCredentials!),
                 })
               } else {
-                log.verbose(`secert ${obj!.metadata.name!.concat('-registry-credentials')} did not change in ${NAMESPACE}`)
+                log.trace(`secert ${obj!.metadata.name!.concat('-registry-credentials')} did not change in ${NAMESPACE}`)
               }
             } else {
               await this.containerRegistryService.createSecret(
@@ -316,9 +322,7 @@ export class ContainerRegistryController extends Operator {
                         { ".dockerconfigjson": `${encode((this.containerRegistryService.createImagePullSecret(registryCredentials!, obj!)))}` },
                       )
                     } else {
-                      log.verbose(
-                        `secret ${obj!.spec!.secretName || obj!.metadata.name!.concat('-image-pull-secret')} did not change in ${namespace}`,
-                      )
+                      log.trace(`secret ${obj!.spec!.secretName || obj!.metadata.name!.concat('-image-pull-secret')} did not change in ${namespace}`)
                     }
                   } else {
                     //secret is using a new name, so get secret by label app.kubernetes.io/created-by
@@ -382,7 +386,7 @@ export class ContainerRegistryController extends Operator {
         this.isRunning = true
         const obj = this.deletedObjs.shift()
         //###############################
-        log.verbose(`Deleted ${obj!.metadata.name}`)
+        log.info(`Deleted ${obj!.metadata.name}`)
 
         await this.containerRegistryService.deleteConfigMap(obj!.metadata.name!.concat('-config'), NAMESPACE)
 
