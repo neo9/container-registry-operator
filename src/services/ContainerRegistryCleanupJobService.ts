@@ -1,5 +1,6 @@
 import { CONTAINER_REGISTRIES, CONTAINER_REGISTRIES_CLEANUP_JOB } from '../constants'
 import { ContainerRegistryCleanupJobData } from '../models/ContainerRegistryCleanupJobData'
+import { ContainerRegistryData } from '../models/ContainerRegistryData'
 import { ContainerRegistryCleanupJobRepository } from '../repositories/ContainerRegistryCleanupJobRepository'
 import { ContainerRegistryService } from './ContainerRegistryService'
 
@@ -104,5 +105,24 @@ export class ContainerRegistryCleanupJobService {
 
   public async deleteCronJob(name: string, namespace: string): Promise<boolean> {
     return this.containerRegistryCleanupJob.deleteCronJob(name, namespace)
+  }
+
+  public async cronJobHasChanged(
+    name: string,
+    containerRegData: ContainerRegistryData,
+    containerRegCleanupData: ContainerRegistryCleanupJobData,
+    namespace: string,
+  ): Promise<boolean> {
+    const currentCronJob = await this.containerRegistryCleanupJob.getCronJob(name, namespace)
+    if (
+      JSON.stringify(containerRegCleanupData.spec!.args) ==
+        JSON.stringify(currentCronJob!.spec!.jobTemplate!.spec!.template!.spec!.containers![0].args) &&
+      containerRegCleanupData.spec!.schedule == currentCronJob!.spec!.schedule &&
+      containerRegData.metadata!.name!.concat('-config') == currentCronJob!.spec!.jobTemplate!.spec!.template!.spec!.volumes![0].configMap!.name &&
+      containerRegData.metadata!.name!.concat('-registry-credentials') ==
+        currentCronJob!.spec!.jobTemplate!.spec!.template!.spec!.volumes![1].secret!.secretName
+    )
+      return false
+    return true
   }
 }

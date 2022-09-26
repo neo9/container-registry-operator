@@ -44,8 +44,10 @@ export class ContainerRegistryCleanupJobController extends Operator {
       if (await this.containerRegistryService.checkSecretExist(customObject.metadata!.name!.concat('-registry-credentials'), NAMESPACE)) {
         if (!(await this.containerRegistryCleanupJobService.checkCronJobExist(cronName, NAMESPACE))) {
           await this.containerRegistryCleanupJobService.createCronJob(cronName, NAMESPACE, obj, customObject)
-        } else {
+        } else if (await this.containerRegistryCleanupJobService.cronJobHasChanged(cronName, customObject, obj, NAMESPACE)) {
           await this.containerRegistryCleanupJobService.updateCronJob(cronName, NAMESPACE, obj, customObject)
+        } else {
+          log.info(`${cronName} did not change in ${NAMESPACE}`)
         }
       }
     })

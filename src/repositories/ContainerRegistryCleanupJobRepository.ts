@@ -34,6 +34,14 @@ export class ContainerRegistryCleanupJobRepository {
     }
   }
 
+  public async getCronJob(name: string, namespace: string): Promise<V1beta1CronJob | undefined> {
+    try {
+      return (await this.k8sBatchV1beta1Api.readNamespacedCronJob(name, namespace)).body
+    } catch (error) {
+      handleError(error, `source: error while fetching cronjob "${name}" from namespace "${namespace}"`)
+    }
+  }
+
   public async deleteCronJob(name: string, namespace: string): Promise<boolean> {
     try {
       log.trace(`Deleting ${name}`)
