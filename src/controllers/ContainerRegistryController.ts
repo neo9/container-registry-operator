@@ -324,6 +324,31 @@ export class ContainerRegistryController extends Operator {
                     } else {
                       log.trace(`secret ${obj!.spec!.secretName || obj!.metadata.name!.concat('-image-pull-secret')} did not change in ${namespace}`)
                     }
+                    // Check if sa  default still has the image pull secret, if not add it again
+                    if (
+                      !(await this.containerRegistryService.checkServiceAccountIfStillHasImagePullSecret(
+                        'default',
+                        namespace,
+                        obj!.spec!.secretName || obj!.metadata.name!.concat('-image-pull-secret'),
+                      ))
+                    ) {
+                      log.trace(
+                        `serviceaccount default in ${namespace} is missing ${
+                          obj!.spec!.secretName || obj!.metadata.name!.concat('-image-pull-secret')
+                        } `,
+                      )
+                      await this.containerRegistryService.addImagePullSecretToServiceAccount(
+                        'default',
+                        namespace,
+                        obj!.spec!.secretName || obj!.metadata.name!.concat('-image-pull-secret'),
+                      )
+                    } else {
+                      log.trace(
+                        `serviceaccount default in ${namespace} still has ${
+                          obj!.spec!.secretName || obj!.metadata.name!.concat('-image-pull-secret')
+                        } `,
+                      )
+                    }
                   } else {
                     //secret is using a new name, so get secret by label app.kubernetes.io/created-by
                     // delete old secret and create new

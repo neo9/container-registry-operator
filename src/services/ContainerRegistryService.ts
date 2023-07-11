@@ -158,4 +158,9 @@ export class ContainerRegistryService {
       log.trace(`${imagePullSecret} does not exist in ${SAname} of ${namespace}`)
     }
   }
+
+  async checkServiceAccountIfStillHasImagePullSecret(SAname: string, namespace: string, imagePullSecret: string) {
+    const serviceAccount = await this.containerRegistryRepository.getServiceAccount(SAname, namespace)
+    return serviceAccount!.imagePullSecrets?.map((sa) => sa.name).includes(imagePullSecret)
+  }
 }
