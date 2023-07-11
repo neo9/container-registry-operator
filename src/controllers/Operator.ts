@@ -1,5 +1,6 @@
 import { KubeConfig, Watch } from '@kubernetes/client-node'
 import { CONTAINER_REGISTRY_GROUP, CONTAINER_REGISTRY_VERSION, NAMESPACE } from '../constants'
+import { handleError } from '../utils/handleError'
 import { log } from '../utils/logger'
 
 export default abstract class Operator {
@@ -19,6 +20,9 @@ export default abstract class Operator {
 
   async start(): Promise<void> {
     this.watchResource()
+    setInterval(async () => {
+      await this.reconcileLoop()
+    }, 120000) //reconcile every 2m
   }
 
   async watchResource(): Promise<any> {
@@ -32,9 +36,8 @@ export default abstract class Operator {
     )
   }
 
-  onDone(err: any) {
-    log.error(`Connection closed. ${err}`)
-    this.watchResource()
+  onDone() {
+    this.start()
   }
 
   async onEvent(phase: string, apiObj: any) {
@@ -58,8 +61,14 @@ export default abstract class Operator {
   abstract reconcile(obj: any): Promise<void>
 
   abstract deleteResource(obj: any): Promise<void>
+
+  abstract reconcileLoop(): Promise<void>
 }
 
-process.on('unhandledRejection', (reason, p) => {
-  log.error('Unhandled Rejection at: Promise', p, 'reason:', reason)
+process.on('unhandledRejection', (error: any, source: any) => {
+  handleError(error, source)
+})
+
+process.on('uncaughtException', (error: any, source: any) => {
+  handleError(error, source)
 })

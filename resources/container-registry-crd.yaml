@@ -67,6 +67,10 @@ spec:
                 secretRef:
                   description: reference to the dockerconfigjson secret
                   type: string
+                imageRegistry:
+                  nullable: false
+                  description: GCR or Docker repository
+                  type: string
               oneOf:
                 - required: ['gcrAccessData']
                 - required: ['secretRef']

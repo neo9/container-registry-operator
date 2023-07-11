@@ -1,8 +1,6 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  annotations:
-    deployment.kubernetes.io/revision: '4'
   labels:
     app: container-registry-operator
     app.kubernetes.io/component: container-registry-operator
@@ -21,8 +19,15 @@ spec:
       containers:
         - env:
             - name: DEV_MODE
-              value: 'false'
+              value: 'true'
           image: neo9/container-registry-operator:latest
+          resources:
+            requests:
+              cpu: 25m
+              memory: 265M
+            limits:
+              cpu: 85m
+              memory: 300M
           imagePullPolicy: IfNotPresent
           name: container-registry-operator
       serviceAccount: container-registry-operator-service-account

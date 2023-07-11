@@ -1,20 +1,35 @@
 import { CONTAINER_REGISTRIES_CLEANUP_JOB, NAMESPACE } from '../constants'
 import { ContainerRegistryCleanupJobData } from '../models/ContainerRegistryCleanupJobData'
 import { ContainerRegistryCleanupJobService } from '../services/ContainerRegistryCleanupJobService'
+import { ContainerRegistryService } from '../services/ContainerRegistryService'
+import { log } from '../utils/logger'
 import Operator from './Operator'
 
 export class ContainerRegistryCleanupJobController extends Operator {
   private containerRegistryCleanupJobService: ContainerRegistryCleanupJobService
+  private containerRegistryService: ContainerRegistryService
+  private canReconcile: boolean
 
   constructor() {
     super(CONTAINER_REGISTRIES_CLEANUP_JOB)
     this.containerRegistryCleanupJobService = new ContainerRegistryCleanupJobService()
+    this.containerRegistryService = new ContainerRegistryService()
+    this.canReconcile = true
+  }
+
+  async reconcileLoop(): Promise<void> {
+    if (this.canReconcile) {
+      log.info('Reconciling CONTAINER_REGISTRIES_CLEANUP_JOB')
+      const customRessources = await this.containerRegistryCleanupJobService.getCustomResources(CONTAINER_REGISTRIES_CLEANUP_JOB)
+      customRessources.forEach(async (resource) => this.reconcile(resource))
+    }
   }
 
   async reconcile(obj: ContainerRegistryCleanupJobData): Promise<void> {
     /**
      * Get all customRessources by selector
      */
+    this.canReconcile = false
     let customObjects: any[] = []
     if (obj.spec!.selector!.registrySelector!.environnement) {
       customObjects.push(...(await this.containerRegistryCleanupJobService.getCrdsByEnv(obj.spec!.selector!.registrySelector!.environnement)))
@@ -26,12 +41,17 @@ export class ContainerRegistryCleanupJobController extends Operator {
      */
     customObjects.forEach(async (customObject) => {
       const cronName = obj.metadata.name!.concat('-').concat(customObject.metadata!.name!).concat('-cron-job')
-      if (!(await this.containerRegistryCleanupJobService.checkCronJobExist(cronName, NAMESPACE))) {
-        await this.containerRegistryCleanupJobService.createCronJob(cronName, NAMESPACE, obj, customObject)
-      } else {
-        await this.containerRegistryCleanupJobService.updateCronJob(cronName, NAMESPACE, obj, customObject)
+      if (await this.containerRegistryService.checkSecretExist(customObject.metadata!.name!.concat('-registry-credentials'), NAMESPACE)) {
+        if (!(await this.containerRegistryCleanupJobService.checkCronJobExist(cronName, NAMESPACE))) {
+          await this.containerRegistryCleanupJobService.createCronJob(cronName, NAMESPACE, obj, customObject)
+        } else if (await this.containerRegistryCleanupJobService.cronJobHasChanged(cronName, customObject, obj, NAMESPACE)) {
+          await this.containerRegistryCleanupJobService.updateCronJob(cronName, NAMESPACE, obj, customObject)
+        } else {
+          log.info(`${cronName} did not change in ${NAMESPACE}`)
+        }
       }
     })
+    this.canReconcile = true
   }
 
   /**

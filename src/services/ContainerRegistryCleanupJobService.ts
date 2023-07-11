@@ -1,12 +1,20 @@
 import { CONTAINER_REGISTRIES, CONTAINER_REGISTRIES_CLEANUP_JOB } from '../constants'
 import { ContainerRegistryCleanupJobData } from '../models/ContainerRegistryCleanupJobData'
+import { ContainerRegistryData } from '../models/ContainerRegistryData'
 import { ContainerRegistryCleanupJobRepository } from '../repositories/ContainerRegistryCleanupJobRepository'
+import { ContainerRegistryService } from './ContainerRegistryService'
 
 export class ContainerRegistryCleanupJobService {
   private containerRegistryCleanupJob: ContainerRegistryCleanupJobRepository
+  private containerRegistryService: ContainerRegistryService
 
   constructor() {
     this.containerRegistryCleanupJob = new ContainerRegistryCleanupJobRepository()
+    this.containerRegistryService = new ContainerRegistryService()
+  }
+
+  public async getCustomResources(cr: string): Promise<any[]> {
+    return (await this.containerRegistryCleanupJob.getAllCrds(cr)).body!.items!
   }
 
   public async getCrdsByEnv(env: string): Promise<any[]> {
@@ -27,13 +35,13 @@ export class ContainerRegistryCleanupJobService {
   }
 
   /**
-   * sync with the current state
-   * add container-registry => check for an existing cleanup job with a selector that groups this container-registry and create a cleanup job
-   * update container-registry => check if it has a cleanup job
+   * sync cleanup job with the current state
+   * add new CR container-registry => check for an existing cleanup job with a selector that groups this CR and create a cleanup job
+   * update a CR container-registry => check if it has a cleanup job
    *        if yes => check if it still meet the same conditions
    *             if no => delete it cronjob
    *        if no => delete it cronjob and check for existing cleanup jobs
-   *            if it meets the condition of a cleanup job then creat a cronjob
+   *            if it meets the condition of a cleanup job then create a cronjob
    */
   public async sync(registryCustomObject: any, namespace: string, phase: string): Promise<any> {
     const cleanupJobs = await this.containerRegistryCleanupJob.getAllCrds(CONTAINER_REGISTRIES_CLEANUP_JOB)
@@ -45,8 +53,12 @@ export class ContainerRegistryCleanupJobService {
             cleanupjob.spec?.selector?.registrySelector?.environnement === registryCustomObject.metadata?.labels?.environnement ||
             cleanupjob.spec?.selector?.registrySelector?.registry === registryCustomObject.metadata?.labels?.registry
           ) {
-            if (!(await this.containerRegistryCleanupJob.checkCronJobExist(cronName, namespace))) {
-              await this.containerRegistryCleanupJob.createCronJob(cronName, namespace, cleanupjob, registryCustomObject)
+            if (
+              await this.containerRegistryService.checkSecretExist(registryCustomObject.metadata!.name!.concat('-registry-credentials'), namespace)
+            ) {
+              if (!(await this.containerRegistryCleanupJob.checkCronJobExist(cronName, namespace))) {
+                await this.containerRegistryCleanupJob.createCronJob(cronName, namespace, cleanupjob, registryCustomObject)
+              }
             }
           }
           break
@@ -55,8 +67,12 @@ export class ContainerRegistryCleanupJobService {
             cleanupjob.spec?.selector?.registrySelector?.environnement === registryCustomObject.metadata?.labels?.environnement ||
             cleanupjob.spec?.selector?.registrySelector?.registry === registryCustomObject.metadata?.labels?.registry
           ) {
-            if (!(await this.containerRegistryCleanupJob.checkCronJobExist(cronName, namespace))) {
-              await this.containerRegistryCleanupJob.createCronJob(cronName, namespace, cleanupjob, registryCustomObject)
+            if (
+              await this.containerRegistryService.checkSecretExist(registryCustomObject.metadata!.name!.concat('-registry-credentials'), namespace)
+            ) {
+              if (!(await this.containerRegistryCleanupJob.checkCronJobExist(cronName, namespace))) {
+                await this.containerRegistryCleanupJob.createCronJob(cronName, namespace, cleanupjob, registryCustomObject)
+              }
             }
           } else {
             if (await this.containerRegistryCleanupJob.checkCronJobExist(cronName, namespace)) {
@@ -65,7 +81,9 @@ export class ContainerRegistryCleanupJobService {
           }
           break
         case 'DELETE':
-          await this.containerRegistryCleanupJob.deleteCronJob(cronName, namespace)
+          if (await this.containerRegistryCleanupJob.checkCronJobExist(cronName, namespace)) {
+            await this.containerRegistryCleanupJob.deleteCronJob(cronName, namespace)
+          }
           break
         default:
           break
@@ -74,18 +92,37 @@ export class ContainerRegistryCleanupJobService {
   }
 
   public async checkCronJobExist(name: string, namespace: string) {
-    return await this.containerRegistryCleanupJob.checkCronJobExist(name, namespace)
+    return this.containerRegistryCleanupJob.checkCronJobExist(name, namespace)
   }
 
   public async createCronJob(name: string, namespace: string, customRessource: ContainerRegistryCleanupJobData, customObject: any) {
-    return await this.containerRegistryCleanupJob.createCronJob(name, namespace, customRessource, customObject)
+    return this.containerRegistryCleanupJob.createCronJob(name, namespace, customRessource, customObject)
   }
 
   public async updateCronJob(name: string, namespace: string, myCustomResource: ContainerRegistryCleanupJobData, customObject: any) {
-    return await this.containerRegistryCleanupJob.updateCronJob(name, namespace, myCustomResource, customObject)
+    return this.containerRegistryCleanupJob.updateCronJob(name, namespace, myCustomResource, customObject)
   }
 
   public async deleteCronJob(name: string, namespace: string): Promise<boolean> {
-    return await this.containerRegistryCleanupJob.deleteCronJob(name, namespace)
+    return this.containerRegistryCleanupJob.deleteCronJob(name, namespace)
+  }
+
+  public async cronJobHasChanged(
+    name: string,
+    containerRegData: ContainerRegistryData,
+    containerRegCleanupData: ContainerRegistryCleanupJobData,
+    namespace: string,
+  ): Promise<boolean> {
+    const currentCronJob = await this.containerRegistryCleanupJob.getCronJob(name, namespace)
+    if (
+      JSON.stringify(containerRegCleanupData.spec!.args) ==
+        JSON.stringify(currentCronJob!.spec!.jobTemplate!.spec!.template!.spec!.containers![0].args) &&
+      containerRegCleanupData.spec!.schedule == currentCronJob!.spec!.schedule &&
+      containerRegData.metadata!.name!.concat('-config') == currentCronJob!.spec!.jobTemplate!.spec!.template!.spec!.volumes![0].configMap!.name &&
+      containerRegData.metadata!.name!.concat('-registry-credentials') ==
+        currentCronJob!.spec!.jobTemplate!.spec!.template!.spec!.volumes![1].secret!.secretName
+    )
+      return false
+    return true
   }
 }

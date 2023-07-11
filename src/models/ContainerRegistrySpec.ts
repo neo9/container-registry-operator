@@ -5,4 +5,5 @@ export interface ContainerRegistrySpec {
   secretRef?: string
   namespaces: string[]
   secretName?: string
+  imageRegistry?: string
 }
