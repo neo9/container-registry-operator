@@ -1,3 +1,11 @@
+<a name="v0.1.5"></a>
+
+## [v0.1.5](https://github.com/neo9/container-registry-operator/-/tree/v0.1.5) (2023-07-11)
+
+### Bug Fixes
+
+- Adds check on Service Account when reconciliating
+
 <a name="v0.1.4"></a>
 
 ## [v0.1.4](https://github.com/neo9/container-registry-operator/-/tree/v0.1.4) (2022-09-26)
